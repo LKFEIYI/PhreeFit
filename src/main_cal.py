@@ -107,7 +107,7 @@ class Adsorption:
                 log_k     0
         END
         '''
-    def eqilibrate_solution(self,ionic_strength=0.01,initial_pH=7.0, cation="Na",anion="Cl"):
+    def equilibrate_solution(self,ionic_strength=0.01,initial_pH=7.0, cation="Na",anion="Cl"):
         #this solution is for equilibrium with surface, especially for
         #some mud-like samples, e.g., bacteria, sediments
         self.unknown_surface=True
@@ -189,13 +189,13 @@ class Adsorption:
         for i in output.keys():
             self.output +=  "    -" + i +"                "+ output[i]
 
-    def mix_action(self, initial_volumn, mix_volumn):
+    def mix_action(self, initial_volume, mix_volume):
         self.first_mix = ""
         n = 1
         if len(self.cs_lst) == 1:
             acid_volume = 0
             base_volume = 0
-            for v in mix_volumn:
+            for v in mix_volume:
                 if v < 0:
                     base_volume = v
                 else:
@@ -206,13 +206,13 @@ class Adsorption:
                 1    {1}
                 12    {2}
                 13    {3}
-            END'''.format(n, initial_volumn / 1000, acid_volume / 1000, abs(base_volume / 1000))
+            END'''.format(n, initial_volume / 1000, acid_volume / 1000, abs(base_volume / 1000))
                 n += 1
         else:
             for i in range(0, len(self.cs_lst)):
                 acid_volume = 0
                 base_volume = 0
-                vols = mix_volumn.get_group(self.cs_lst[i])["volume"].to_list()
+                vols = mix_volume.get_group(self.cs_lst[i])["volume"].to_list()
                 for v in vols:
                     if v < 0:
                         base_volume = v
@@ -224,13 +224,13 @@ class Adsorption:
                                     {4}    {1}
                                     12    {2}
                                     13    {3}
-                                END'''.format(n, initial_volumn / 1000, acid_volume / 1000, abs(base_volume / 1000),
+                                END'''.format(n, initial_volume / 1000, acid_volume / 1000, abs(base_volume / 1000),
                                               i + 1)
                     n += 1
 
     def eq_ph(self,ph_list,eq_phase,ph_sep,auto_p=False):
         if auto_p==True:
-            ph_sep=self.initial_ph()
+            ph_sep=self.initial_ph(eq_phase=eq_phase)
         self.eq = ''''''
         if len(self.cs_lst)==1:
             for i in ph_list:
@@ -376,18 +376,24 @@ class Adsorption:
         else:
             self.total = self.initial_condition+ self.sms +  self.output + self.eq
 
-    def initial_ph(self):
-        if len(self.cs_lst) == 1:
+    def initial_ph(self,eq_phase):
+        temp_eq = ""
+        if eq_phase != "":
             temp_eq = '''
+                 EQUILIBRIUM_PHASES 1
+                     {0}
+            '''.format(eq_phase)
+        if len(self.cs_lst) == 1:
+            temp_eq += '''
                  USE surface 1
                  USE solution 1
                  END
                  '''
         else:
-            temp_eq=""
+            temp_eq += ""
             for j in range(0, len(self.cs_lst)):
                 temp_eq+='''
-                  USE surface 1
+                 USE surface 1
                  USE solution {0}
                  END
                  '''.format(j+1)
@@ -432,7 +438,7 @@ def advanced_fun(p,exp_data, titration:Adsorption,mix=False):
     return np.linalg.norm(error)
 
 
-def advanced_fun_auoto(p,exp_data,ph_list,eq_phase, titration:Adsorption,mix=False):
+def advanced_fun_auto(p,exp_data,ph_list,eq_phase, titration:Adsorption,mix=False):
 
     titration.set_para(p)
     titration.eq_ph(ph_list=ph_list,eq_phase=eq_phase,ph_sep=None,auto_p=True)
@@ -493,14 +499,14 @@ def r2(exp_data, model_data):
 def optimize_problem(mix_or_eq,method,x0,bounds,maxiter=1000,core=1,t=5230,extra_para=None):
     # args for proto_fun is exp_data,titration:Adsorption,mix=ture
     # args for advanced_fun is exp_data, titration:Adsorption,mix=False
-    # args for advanced_fun_auoto is exp_data,ph_list,eq_phase, titration:Adsorption,mix=False
+    # args for advanced_fun_auto is exp_data,ph_list,eq_phase, titration:Adsorption,mix=False
     # print(maxiter)
     if mix_or_eq==0:
         residual_func=proto_fun
     elif mix_or_eq==1:
         residual_func=advanced_fun
     else:
-        residual_func=advanced_fun_auoto
+        residual_func=advanced_fun_auto
     if method=="Differential evolution":
         if core>1:
             results=differential_evolution(residual_func,bounds=bounds,x0=x0,maxiter=maxiter,updating="deferred",workers=core,args=extra_para)
