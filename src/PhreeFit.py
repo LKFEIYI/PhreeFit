@@ -693,7 +693,7 @@ class Ui_MainWindow(object):
 
         self.label_15.setText(QCoreApplication.translate("MainWindow", u"mol/L", None))
         self.groupBox_3.setTitle(QCoreApplication.translate("MainWindow", u"Initial Solution", None))
-        self.label_cs.setText(QCoreApplication.translate("MainWindow", u"NaCl mol/L", None))
+        self.label_cs.setText(QCoreApplication.translate("MainWindow", u"IS mol/L", None))
         self.label_ph.setText(QCoreApplication.translate("MainWindow", u"Initial pH", None))
         self.label_vol.setText(QCoreApplication.translate("MainWindow", u"Initial volume mL", None))
         self.pushButton_db.setText(QCoreApplication.translate("MainWindow", u"Database", None))
@@ -869,6 +869,7 @@ class Ui_MainWindow(object):
         self.op_obj = []
         self.opad = []
         self.surf_eq = None
+        #self.task_name=None
         pg.setConfigOptions(leftButtonPan=False)
         pg.setConfigOption('background', 'w')
         pg.setConfigOption('foreground', 'k')
@@ -897,6 +898,8 @@ class Ui_MainWindow(object):
             filename = QFileDialog.getOpenFileName(None, "Open data", dir=self.data_folder)
             if filename[0] != "":
                 data_review = pd.read_csv(filename[0])
+                data_review=data_review.dropna(axis=1,how="all")
+                data_review=data_review.dropna(axis=0)
                 self.multi_is = False
                 if len(data_review.columns) == 2:
                     data_review.columns = ["pH", "volume"]
@@ -922,6 +925,8 @@ class Ui_MainWindow(object):
             filename = QFileDialog.getOpenFileName(None, "Open data", dir=self.data_folder)
             if filename[0] != "":
                 data_review = pd.read_csv(filename[0])
+                data_review=data_review.dropna(axis=1,how="all")
+                data_review=data_review.dropna(axis=0)
                 self.multi_is_ad = False
                 if self.checkBox.isChecked() == False:
                     second_col = "amounts"
@@ -954,7 +959,8 @@ class Ui_MainWindow(object):
     def load_database(self):
         database_path = QFileDialog.getOpenFileName(None, "Open database", dir=self.database_folder)[0]
         if database_path != "":
-            self.database = database_path
+            with open(database_path, "r", encoding="UTF-8") as file:
+                self.database = file.read()
 
     def add_surface(self):
         tem_sp = mc.SurfaceSpecies2()
@@ -965,15 +971,24 @@ class Ui_MainWindow(object):
                            c1_initial=float(self.lineEdit_icap.text()),
                            c1=(float(self.lineEdit_caplb.text()), float(self.lineEdit_capub.text())), c2=0)
         if self.checkBox_pro.isChecked() == True:
+            if float(self.lineEdit_ikp.text())<float(self.lineEdit_plb.text()) or float(self.lineEdit_ikp.text())>float(self.lineEdit_pub.text()):
+                QMessageBox.information(None, "warning", "The initial guess of log_k should be within the bounds",
+                                    QMessageBox.Yes | QMessageBox.No)
+
             tem_sp.add_reactions(reactions=tem_sp.surface_name + "OH" + " + H+ = " + tem_sp.surface_name + "OH2+",
-                                 k_initial=float(self.lineEdit_ikp.text()),
-                                 k=(float(self.lineEdit_plb.text()), float(self.lineEdit_pub.text())), z0d=True,
-                                 ztotal=1, z1=1)
+                                     k_initial=float(self.lineEdit_ikp.text()),
+                                     k=(float(self.lineEdit_plb.text()), float(self.lineEdit_pub.text())), z0d=True,
+                                     ztotal=1, z1=1)
+
         if self.checkBox_dpro.isChecked() == True:
+            if float(self.lineEdit_ikdp.text())<float(self.lineEdit_dplb.text()) or float(self.lineEdit_ikdp.text())>float(self.lineEdit_dpub.text()):
+                QMessageBox.information(None, "warning", "The initial guess of log_k should be within the bounds",
+                                        QMessageBox.Yes | QMessageBox.No)
+
             tem_sp.add_reactions(reactions=tem_sp.surface_name + "OH" + " = " + tem_sp.surface_name + "O-" + " + H+",
-                                 k_initial=float(self.lineEdit_ikdp.text()),
-                                 k=(float(self.lineEdit_dplb.text()), float(self.lineEdit_dpub.text())), z0d=True,
-                                 ztotal=1, z1=1)
+                                     k_initial=float(self.lineEdit_ikdp.text()),
+                                     k=(float(self.lineEdit_dplb.text()), float(self.lineEdit_dpub.text())), z0d=True,
+                                     ztotal=1, z1=1)
         return tem_sp
 
     def check_sp(self):
@@ -1008,6 +1023,7 @@ class Ui_MainWindow(object):
     def optimize_data(self):
         try:
             # print(self.output_folder)
+            task_name = QInputDialog.getText(None, "Task name", "Input here")[0]
             self.config_file.update_config_file([self.data_folder,self.database_folder,self.output_folder])
             num_process = min([int(self.lineEdit_cycle.text(), multiprocessing.cpu_count())])
             pt = mc.Adsorption(self.comboBox_mdl.currentText())
@@ -1047,7 +1063,7 @@ class Ui_MainWindow(object):
             self.pushButton_opt.setEnabled(False)
             self.comboBox_mdl.setEnabled(False)
             self.work.set_pa(pt, self.ph_res, int(self.lineEdit_iter.text()), int(self.lineEdit_temp.text()), mix=0,
-                             method=self.method_selected, process_num=num_process)
+                             method=self.method_selected, process_num=num_process,task=task_name)
             self.work.signals.connect(self.display_results)
             self.work.start()
             self.pushButton_stp.setEnabled(True)
@@ -1063,14 +1079,14 @@ class Ui_MainWindow(object):
 
         if ssss["successful"] == True:
             log_temp = self.comboBox_mdl.currentText()
-            self.textEdit_res.append(ssss["eva"] + "\n" + ssss["time"] + "\n")
+            self.textEdit_res.append(ssss["Task"]+'\n'+ssss["eva"] + "\n" + ssss["time"] + "\n")
             log_temp += ssss["surface"]
-            write_log(ssss["eva"] + log_temp + "\n" + ssss["time"], self.output_folder)
-            write_results(self.ph_res, ssss["model"], self.output_folder)
+            write_log(ssss["Task"]+'\n'+ssss["eva"] + log_temp + "\n" + ssss["time"], self.output_folder)
+            write_results(self.ph_res, ssss["model"],ssss["speciation"], self.output_folder)
             self.plot_res(ssss["model"], titration=True, view=False)
         else:
-            self.textEdit_res.append(ssss["error"] + "\n")
-            write_log(ssss["error"], self.output_folder)
+            self.textEdit_res.append(ssss["Task"]+'\n'+ssss["error"] + "\n")
+            write_log(ssss["Task"]+'\n'+ssss["error"], self.output_folder)
 
     def clear_sp(self):
         self.op_obj.clear()
@@ -1136,14 +1152,23 @@ class Ui_MainWindow(object):
         if self.checkBox_site.isChecked() == True:
             site = float(self.lineEdit_isite_2.text())
         else:
+            if float(self.lineEdit_isite_2.text())<float(self.lineEdit_sitelb_2.text()) or float(self.lineEdit_isite_2.text())>float(self.lineEdit_siteub_2.text()):
+                QMessageBox.information(None, "warning", "The initial guess of sites should be within the bounds",
+                                    QMessageBox.Yes | QMessageBox.No)
             site = (float(self.lineEdit_sitelb_2.text()), float(self.lineEdit_siteub_2.text()))
         if self.checkBox_c1.isChecked() == True:
             c1 = float(self.lineEdit_ic1.text())
         else:
+            if float(self.lineEdit_ic1.text())<float(self.lineEdit_ic1lb.text()) or float(self.lineEdit_ic1.text())>float(self.lineEdit_ic1ub.text()):
+                QMessageBox.information(None, "warning", "The initial guess of C1 should be within the bounds",
+                                    QMessageBox.Yes | QMessageBox.No)
             c1 = (float(self.lineEdit_ic1lb.text()), float(self.lineEdit_ic1ub.text()))
         if self.checkBox_c2.isChecked() == True:
             c2 = float(self.lineEdit_ic2.text())
         else:
+            if float(self.lineEdit_ic2.text())<float(self.lineEdit_ic2lb.text()) or float(self.lineEdit_ic2.text())>float(self.lineEdit_ic2ub.text()):
+                QMessageBox.information(None, "warning", "The initial guess of C2 should be within the bounds",
+                                    QMessageBox.Yes | QMessageBox.No)
             c2 = (float(self.lineEdit_ic2lb.text()), float(self.lineEdit_ic2ub.text()))
         surface_formula = self.lineEdit_sformula.text()
         surface_formula = surface_formula[0].upper() + surface_formula[1:]
@@ -1184,10 +1209,16 @@ class Ui_MainWindow(object):
                 if self.checkBox_logk.isChecked() == True:
                     logk = float(self.lineEdit_ik.text())
                 else:
+                    if float(self.lineEdit_ik.text()) < float(self.lineEdit_iklb.text()) or float(self.lineEdit_ik.text()) > float(self.lineEdit_ikub.text()):
+                        QMessageBox.information(None, "warning", "The initial guess of k should be within the bounds",
+                                                QMessageBox.Yes | QMessageBox.No)
                     logk = (float(self.lineEdit_iklb.text()), float(self.lineEdit_ikub.text()))
                 if self.checkBox_z1.isChecked() == True:
                     z1 = float(self.lineEdit_iz1.text())
                 else:
+                    if float(self.lineEdit_iz1.text()) < float(self.lineEdit_iz1lb.text()) or float(self.lineEdit_iz1.text()) > float(self.lineEdit_iz1ub.text()):
+                        QMessageBox.information(None, "warning", "The initial guess of z1 should be within the bounds",
+                                                QMessageBox.Yes | QMessageBox.No)
                     z1 = (float(self.lineEdit_iz1lb.text()), float(self.lineEdit_iz1ub.text()))
                 if self.comboBox_charge.currentIndex() == 0:
                     z0d = True
@@ -1244,6 +1275,7 @@ class Ui_MainWindow(object):
     def advanced_opt(self):
         try:
             self.config_file.update_config_file([self.data_folder, self.database_folder, self.output_folder])
+            task_name = QInputDialog.getText(None, "Task name", "Input here")[0]
             num_process = min([int(self.lineEdit_cycle_2.text(),multiprocessing.cpu_count())])
             problem = mc.Adsorption(self.comboBox_mdl_2.currentText())
             if self.multi_is_ad == False:
@@ -1286,7 +1318,7 @@ class Ui_MainWindow(object):
                 self.comboBox_mdl_2.setEnabled(False)
                 self.work2.set_pa(problem, self.ph_res_ad, int(self.lineEdit_iter_2.text()),
                                   int(self.lineEdit_temp_2.text()), mix=0, method=self.method_selected,
-                                  process_num=num_process)
+                                  process_num=num_process,task=task_name)
                 self.work2.signals.connect(self.display_results2)
                 self.work2.start()
             else:
@@ -1304,7 +1336,7 @@ class Ui_MainWindow(object):
                 self.work2.set_pa(problem, self.ph_res_ad, int(self.lineEdit_iter_2.text()),
                                   int(self.lineEdit_temp_2.text()),
                                   mix=mix, ph_list=self.mix_data_ad, eq=self.textEdit.toPlainText(),
-                                  method=self.method_selected, process_num=num_process)
+                                  method=self.method_selected, process_num=num_process,task=task_name)
                 self.work2.signals.connect(self.display_results2)
                 self.work2.start()
             self.pushButton_stp_2.setEnabled(True)
@@ -1320,14 +1352,14 @@ class Ui_MainWindow(object):
 
         if ssss["successful"] == True:
             log_temp = self.comboBox_mdl_2.currentText()
-            self.textEdit_res_2.append(ssss["eva"] + "\n" + ssss["time"] + "\n")
+            self.textEdit_res_2.append(ssss["Task"]+'\n'+ssss["eva"] + "\n" + ssss["time"] + "\n")
             log_temp += ssss["surface"]
-            write_log(ssss["eva"] + log_temp + "\n" + ssss["time"], self.output_folder)
-            write_results(self.ph_res_ad, ssss["model"], self.output_folder)
+            write_log(ssss["Task"]+'\n'+ssss["eva"] + log_temp + "\n" + ssss["time"], self.output_folder)
+            write_results(self.ph_res_ad, ssss["model"],ssss["speciation"], self.output_folder)
             self.plot_res(ssss["model"], ssss["type"], view=True)
         else:
-            self.textEdit_res_2.append(ssss["error"] + "\n")
-            write_log(ssss["error"], self.output_folder)
+            self.textEdit_res_2.append(ssss["Task"]+'\n'+ssss["error"] + "\n")
+            write_log(ssss["Task"]+'\n'+ssss["error"], self.output_folder)
 
     def stop_thread2(self):
         self.work2.terminate()
@@ -1422,7 +1454,7 @@ class WorkThreadAdvanced(QThread):
     def __int__(self):
         super(WorkThreadAdvanced, self).__init__()
 
-    def set_pa(self, p1, p2, max_t, T, mix, ph_list=None, eq=None, method="Differential evolution", process_num=1):
+    def set_pa(self, p1, p2, max_t, T, mix, ph_list=None, eq=None, method="Differential evolution", process_num=1,task=None):
         self.p1 = p1
         self.p2 = p2
         self.max_t = max_t
@@ -1434,6 +1466,7 @@ class WorkThreadAdvanced(QThread):
         self.ph_list = ph_list  # ph list for equilibrium
         self.method = method
         self.processes = process_num
+        self.task_name=task
 
     def run(self):
         # args for proto_fun is exp_data,titration:Adsorption,mix=ture
@@ -1447,7 +1480,7 @@ class WorkThreadAdvanced(QThread):
                 problem_type = True
 
                 fix_para = (self.p2, self.p1, mix)
-            elif self.mix_or_eq == 1:  # no auto calculate, use given point
+            elif self.mix_or_eq == 1:  # no auto calculate, use given pH value
                 mix = False
 
                 fix_para = (self.p2, self.p1, mix)
@@ -1467,18 +1500,22 @@ class WorkThreadAdvanced(QThread):
             res_str += "Optimized parameters: "
             for x in results.x:
                 res_str += str(x) + "  "
-            res_str += "\n" + "R2" + "\t" + "adj. R2" + "\t" + "RMSE" + "\t" + "Evaluations" + "\n"
-            for y in eva[0:4]:
-                res_str += str(y) + "\t"
+            res_str += "\n" + "R2" + "\t" + "adj. R2" + "\t" + "BIC" + "\t" + "RMSE" + "\t" + "Evaluations" + "\n"
+            for y in eva[0:3]:
+                res_str += "{:.5f}".format(y) + "\t"
+            res_str += "{:.3e}".format(eva[3]) + "\t" + str(eva[4])
             # write_results(self.p2, eva[4],self.output_folder)
+            self.msg["Task"]="Task: "+self.task_name
             self.msg["successful"] = True
             self.msg["eva"] = res_str + "\n"
-            self.msg["model"] = eva[4].tolist()
-            self.msg["surface"] = eva[5]
+            self.msg["model"] = eva[5].tolist()
+            self.msg["surface"] = eva[6]
             self.msg["type"] = problem_type
             self.msg["time"] = "Time: {:.2f} s".format(ed_eva_t - st_eva_t)
+            self.msg["speciation"]=eva[7]
             self.signals.emit(self.msg)
         except Exception as e:
+            self.msg["Task"] = self.task_name
             self.msg["successful"] = False
             self.msg["error"] = str(e)
             self.signals.emit(self.msg)
@@ -1562,12 +1599,16 @@ def write_log(log_info: str, output_path: str):
         f.write(log_info + "\n")
 
 
-def write_results(exp_data, model_res, output_path: str):
+def write_results(exp_data, model_res, speciation, output_path: str):
     with open(os.path.join(output_path, "phreefit_results.txt"), "a") as f2:
         f2.write("\n" + time.ctime() + "\n")
         for i in range(0, len(exp_data)):
             f2.write(str(exp_data[i]) + "\t")
             f2.write(str(model_res[i]) + "\n")
+        #print(speciation)
+        for sps in np.array(speciation,dtype=str):
+            f2.write(" ".join(sps[1:])+"\n")
+
 
 class MyWindow(QMainWindow):
     def closeEvent(self,event):
