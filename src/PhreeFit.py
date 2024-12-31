@@ -52,6 +52,10 @@ class Ui_MainWindow(object):
         self.actionDual_annealing.setObjectName(u"actionDual_annealing")
         self.actionDual_annealing.setCheckable(True)
         self.actionDual_annealing.setFont(font)
+        self.actionnelder_mead = QAction(MainWindow)
+        self.actionnelder_mead.setObjectName(u"actionnelder_mead")
+        self.actionnelder_mead.setCheckable(True)
+        self.actionnelder_mead.setFont(font)
         self.actionDatabase_folder = QAction(MainWindow)
         self.actionDatabase_folder.setObjectName(u"actionDatabase_folder")
         self.actionDatabase_folder.setFont(font)
@@ -611,6 +615,7 @@ class Ui_MainWindow(object):
         self.menuTitration.addAction(self.actionAdvanced)
         self.menuAlgorithm.addAction(self.actiondifferential_evolution)
         self.menuAlgorithm.addAction(self.actionDual_annealing)
+        self.menuAlgorithm.addAction(self.actionnelder_mead)
         self.menuDirectory.addAction(self.actionDatabase_folder)
         self.menuDirectory.addAction(self.actionData_folder)
         self.menuDirectory.addAction(self.actionOutput_folder)
@@ -645,8 +650,9 @@ class Ui_MainWindow(object):
         self.pushButton_opt_2.clicked.connect(self.advanced_opt)
         self.pushButton_stp_2.clicked.connect(self.stop_thread2)
 
-        self.actionDual_annealing.triggered.connect(self.dual_annealing)
         self.actiondifferential_evolution.triggered.connect(self.differential_evolution)
+        self.actionDual_annealing.triggered.connect(self.dual_annealing)
+        self.actionnelder_mead.triggered.connect(self.nelder_mead)
 
         self.checkBox.stateChanged.connect(self.label_change_2)
         self.radioButton_fx_2.toggled.connect(self.label_change_2)
@@ -671,6 +677,7 @@ class Ui_MainWindow(object):
         self.actiondifferential_evolution.setText(
             QCoreApplication.translate("MainWindow", u"Differential evolution", None))
         self.actionDual_annealing.setText(QCoreApplication.translate("MainWindow", u"Dual annealing", None))
+        self.actionnelder_mead.setText(QCoreApplication.translate("MainWindow", u"Nelder Mead", None))
         self.actionDatabase_folder.setText(QCoreApplication.translate("MainWindow", u"Database path", None))
         self.actionOutput_folder.setText(QCoreApplication.translate("MainWindow", u"Output path", None))
         self.actionDisabled.setText(QCoreApplication.translate("MainWindow", u"Disabled", None))
@@ -1076,7 +1083,9 @@ class Ui_MainWindow(object):
         self.pushButton_opt.setEnabled(True)
         self.comboBox_mdl.setEnabled(True)
         self.pushButton_stp.setEnabled(False)
-
+        if ssss["eva"] < int(self.lineEdit_iter.text()) and self.method_selected == "Differential evolution":
+            MessageBox.information(None, "warning", "The iterations of DE method is rather few, please rerun or change some settings",
+                                   QMessageBox.Yes | QMessageBox.No)
         if ssss["successful"] == True:
             log_temp = self.comboBox_mdl.currentText()
             self.textEdit_res.append(ssss["Task"]+'\n'+ssss["eva"] + "\n" + ssss["time"] + "\n")
@@ -1349,7 +1358,9 @@ class Ui_MainWindow(object):
         self.pushButton_opt_2.setEnabled(True)
         self.comboBox_mdl_2.setEnabled(True)
         self.pushButton_stp_2.setEnabled(False)
-
+        if ssss["eva"] < int(self.lineEdit_iter2.text()) and self.method_selected == "Differential evolution":
+            MessageBox.information(None, "warning", "The iterations of DE method is rather few, please rerun or change some settings",
+                                   QMessageBox.Yes | QMessageBox.No)
         if ssss["successful"] == True:
             log_temp = self.comboBox_mdl_2.currentText()
             self.textEdit_res_2.append(ssss["Task"]+'\n'+ssss["eva"] + "\n" + ssss["time"] + "\n")
@@ -1371,6 +1382,7 @@ class Ui_MainWindow(object):
     def dual_annealing(self):
         self.actiondifferential_evolution.setChecked(False)
         self.actionDual_annealing.setChecked(True)
+        self.actionnelder_mead.setChecked(False)
         self.method_selected = self.actionDual_annealing.text()
         self.lineEdit_cycle_2.setEnabled(False)
         self.lineEdit_cycle.setEnabled(False)
@@ -1378,9 +1390,18 @@ class Ui_MainWindow(object):
     def differential_evolution(self):
         self.actionDual_annealing.setChecked(False)
         self.actiondifferential_evolution.setChecked(True)
+        self.actionnelder_mead.setChecked(False)
         self.method_selected = self.actiondifferential_evolution.text()
         self.lineEdit_cycle_2.setEnabled(True)
         self.lineEdit_cycle.setEnabled(True)
+
+    def nelder_mead(self):
+        self.actionnelder_mead.setChecked(True)
+        self.actionDual_annealing.setChecked(False)
+        self.actiondifferential_evolution.setChecked(False)
+        self.method_selected=self.actionnelder_mead.text()
+        self.lineEdit_cycle_2.setEnabled(False)
+        self.lineEdit_cycle.setEnabled(False)
 
     def label_change_2(self):
         if self.checkBox.isChecked() and self.radioButton_ds_2.isChecked():

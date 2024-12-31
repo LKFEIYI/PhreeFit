@@ -1,7 +1,7 @@
 # cython: language_level=3
 import numpy as np
 import phreeqpy.iphreeqc.phreeqc_dll as phc_mod
-from scipy.optimize import dual_annealing, differential_evolution
+from scipy.optimize import dual_annealing, differential_evolution, minimize
 
 
 class SurfaceSpecies2:
@@ -490,6 +490,7 @@ def advanced_fun_auto(p, exp_data, ph_list, eq_phase, titration: Adsorption, mix
 
 def proto_fun(p, exp_data, titration: Adsorption, mix=False):
     titration.set_para(p)
+    # print(p)
     titration.create_script(mix)
     error = run_phreeqc(titration) - exp_data
     return np.linalg.norm(error)
@@ -571,6 +572,12 @@ def optimize_problem(mix_or_eq, method, x0, bounds, maxiter=1000, core=1, t=5230
                                              workers=core, args=extra_para)
         else:
             results = differential_evolution(residual_func, bounds=bounds, x0=x0, maxiter=maxiter, args=extra_para)
-    else:
+    elif method == "Dual annealing":
         results = dual_annealing(residual_func, bounds=bounds, x0=x0, maxiter=maxiter, initial_temp=t, args=extra_para)
+    elif method == "Nelder Mead":
+        results = minimize(residual_func, options={"adaptive":True} ,bounds=bounds, x0=x0, method="Nelder-Mead", args=extra_para)
+    elif method == "Powell":
+        results = minimize(residual_func,bounds=bounds, x0=x0, method="Powell", args=extra_para)
+    else:
+        pass
     return results
