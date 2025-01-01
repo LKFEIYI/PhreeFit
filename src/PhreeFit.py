@@ -1083,8 +1083,8 @@ class Ui_MainWindow(object):
         self.pushButton_opt.setEnabled(True)
         self.comboBox_mdl.setEnabled(True)
         self.pushButton_stp.setEnabled(False)
-        if ssss["eva"] < int(self.lineEdit_iter.text()) and self.method_selected == "Differential evolution":
-            MessageBox.information(None, "warning", "The iterations of DE method is rather few, please rerun or change some settings",
+        if ssss["iterations"] < int(self.lineEdit_iter.text()) and self.method_selected == "Differential evolution":
+            QMessageBox.information(None, "warning", "The iterations of DE method is rather few, please rerun or change some settings",
                                    QMessageBox.Yes | QMessageBox.No)
         if ssss["successful"] == True:
             log_temp = self.comboBox_mdl.currentText()
@@ -1359,7 +1359,7 @@ class Ui_MainWindow(object):
         self.comboBox_mdl_2.setEnabled(True)
         self.pushButton_stp_2.setEnabled(False)
         if ssss["eva"] < int(self.lineEdit_iter2.text()) and self.method_selected == "Differential evolution":
-            MessageBox.information(None, "warning", "The iterations of DE method is rather few, please rerun or change some settings",
+            QMessageBox.information(None, "warning", "The iterations of DE method is rather few, please rerun or change some settings",
                                    QMessageBox.Yes | QMessageBox.No)
         if ssss["successful"] == True:
             log_temp = self.comboBox_mdl_2.currentText()
@@ -1534,6 +1534,7 @@ class WorkThreadAdvanced(QThread):
             self.msg["type"] = problem_type
             self.msg["time"] = "Time: {:.2f} s".format(ed_eva_t - st_eva_t)
             self.msg["speciation"]=eva[7]
+            self.msg["iterations"] = eva[4]
             self.signals.emit(self.msg)
         except Exception as e:
             self.msg["Task"] = self.task_name
@@ -1623,12 +1624,13 @@ def write_log(log_info: str, output_path: str):
 def write_results(exp_data, model_res, speciation, output_path: str):
     with open(os.path.join(output_path, "phreefit_results.txt"), "a") as f2:
         f2.write("\n" + time.ctime() + "\n")
+        f2.write("Experimental data" + "\t" + "Modeled data"+"\n")
         for i in range(0, len(exp_data)):
             f2.write(str(exp_data[i]) + "\t")
             f2.write(str(model_res[i]) + "\n")
-        #print(speciation)
+        f2.write("Surface Speciation:" + "\n")
         for sps in np.array(speciation,dtype=str):
-            f2.write(" ".join(sps[1:])+"\n")
+            f2.write("\t".join(sps[1:])+"\n")
 
 
 class MyWindow(QMainWindow):
