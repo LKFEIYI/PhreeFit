@@ -1083,14 +1083,15 @@ class Ui_MainWindow(object):
         self.pushButton_opt.setEnabled(True)
         self.comboBox_mdl.setEnabled(True)
         self.pushButton_stp.setEnabled(False)
-        if ssss["iterations"] < int(self.lineEdit_iter.text()) and self.method_selected == "Differential evolution":
-            QMessageBox.information(None, "warning", "The iterations of DE method is rather few, please rerun or change some settings",
-                                   QMessageBox.Yes | QMessageBox.No)
+
         if ssss["successful"] == True:
+            if ssss["iterations"] < int(self.lineEdit_iter.text()) and self.method_selected == "Differential evolution":
+                QMessageBox.information(None, "warning", "The iterations of DE method is rather few, please rerun or change some settings",
+                                        QMessageBox.Yes | QMessageBox.No)
             log_temp = self.comboBox_mdl.currentText()
-            self.textEdit_res.append(ssss["Task"]+'\n'+ssss["eva"] + "\n" + ssss["time"] + "\n")
+            self.textEdit_res.append(ssss["Task"] + '\n' + ssss["eva"] + "\n" + ssss["time"] + "\n")
             log_temp += ssss["surface"]
-            write_log(ssss["Task"]+'\n'+ssss["eva"] + log_temp + "\n" + ssss["time"], self.output_folder)
+            write_log(ssss["Task"] + '\n' + ssss["eva"] + log_temp + "\n" + ssss["time"], self.output_folder)
             write_results(self.ph_res, ssss["model"],ssss["speciation"], self.output_folder)
             self.plot_res(ssss["model"], titration=True, view=False)
         else:
@@ -1358,14 +1359,15 @@ class Ui_MainWindow(object):
         self.pushButton_opt_2.setEnabled(True)
         self.comboBox_mdl_2.setEnabled(True)
         self.pushButton_stp_2.setEnabled(False)
-        if ssss["eva"] < int(self.lineEdit_iter2.text()) and self.method_selected == "Differential evolution":
-            QMessageBox.information(None, "warning", "The iterations of DE method is rather few, please rerun or change some settings",
-                                   QMessageBox.Yes | QMessageBox.No)
+
         if ssss["successful"] == True:
+            if ssss["iterations"] < int(self.lineEdit_iter_2.text()) and self.method_selected == "Differential evolution":
+                QMessageBox.information(None, "warning", "The iterations of DE method is rather few, please rerun or change some settings",
+                                        QMessageBox.Yes | QMessageBox.No)
             log_temp = self.comboBox_mdl_2.currentText()
-            self.textEdit_res_2.append(ssss["Task"]+'\n'+ssss["eva"] + "\n" + ssss["time"] + "\n")
+            self.textEdit_res_2.append(ssss["Task"] + '\n' + ssss["eva"] + "\n" + ssss["time"] + "\n")
             log_temp += ssss["surface"]
-            write_log(ssss["Task"]+'\n'+ssss["eva"] + log_temp + "\n" + ssss["time"], self.output_folder)
+            write_log(ssss["Task"] + '\n' + ssss["eva"] + log_temp + "\n" + ssss["time"], self.output_folder)
             write_results(self.ph_res_ad, ssss["model"],ssss["speciation"], self.output_folder)
             self.plot_res(ssss["model"], ssss["type"], view=True)
         else:
