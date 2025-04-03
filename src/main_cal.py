@@ -569,7 +569,7 @@ def optimize_problem(mix_or_eq, method, x0, bounds, maxiter=1000, core=1, t=5230
     if method == "Differential evolution":
         if core > 1:
             results = differential_evolution(residual_func, bounds=bounds, x0=x0, maxiter=maxiter, updating="deferred",
-                                             workers=core, args=extra_para)
+                                              workers=core, args=extra_para)
         else:
             results = differential_evolution(residual_func, bounds=bounds, x0=x0, maxiter=maxiter, args=extra_para)
     elif method == "Dual annealing":
