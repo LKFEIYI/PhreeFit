@@ -1311,6 +1311,7 @@ class Ui_MainWindow(object):
             for items in self.opad:
                 problem.add_surface(items)
             if self.checkBox.isChecked() == True:
+                problem.selected_output({}) #reset the output
                 if self.radioButton_fx_2.isChecked() == True:
                     type_solution = "fix_pH"
                     problem.mix_solution(type_solution=type_solution, base_pH=float(self.lineEdit_base_2.text()),

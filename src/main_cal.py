@@ -202,7 +202,7 @@ class Adsorption:
             -water                true           
         '''
         for i in output.keys():
-            self.output += "    -" + i + "                " + output[i]
+            self.output += "    -" + i + "                " + output[i] + "\n"
 
     def mix_action(self, initial_volume, mix_volume):
         self.first_mix = ""
