@@ -567,11 +567,28 @@ def optimize_problem(mix_or_eq, method, x0, bounds, maxiter=1000, core=1, t=5230
     else:
         residual_func = advanced_fun_auto
     if method == "Differential evolution":
+        param_de = {
+            'strategy': "best1bin",
+            'init': "halton",
+            'recombination': 0.8
+        }
+        if extra_para[-2].p_type=="CCM" or extra_para[-2].p_type=="CDMUSIC":
+            param_de = {
+                'strategy': "best1exp",
+                'init': "halton",
+                'recombination': 0.9
+            }
         if core > 1:
-            results = differential_evolution(residual_func, bounds=bounds, x0=x0, maxiter=maxiter, updating="deferred",
-                                              workers=core, args=extra_para)
+            de_results = differential_evolution(residual_func, bounds=bounds, x0=x0, maxiter=maxiter, updating="deferred",
+                                              workers=core, args=extra_para,polish=False,**param_de)
         else:
-            results = differential_evolution(residual_func, bounds=bounds, x0=x0, maxiter=maxiter, args=extra_para)
+            de_results = differential_evolution(residual_func, bounds=bounds, x0=x0, maxiter=maxiter, args=extra_para,polish=False,**param_de)
+        polished_results = minimize(residual_func, options={"adaptive":True} ,bounds=bounds, x0=de_results.x, method="Nelder-Mead", args=extra_para)
+        if polished_results.success and polished_results.fun < de_results.fun:
+            results=polished_results
+            results.nfev += de_results.nfev
+        else:
+            results=de_results
     elif method == "Dual annealing":
         results = dual_annealing(residual_func, bounds=bounds, x0=x0, maxiter=maxiter, initial_temp=t, args=extra_para)
     elif method == "Nelder Mead":
