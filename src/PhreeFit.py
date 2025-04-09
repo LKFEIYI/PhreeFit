@@ -907,6 +907,10 @@ class Ui_MainWindow(object):
                 data_review = pd.read_csv(filename[0])
                 data_review=data_review.dropna(axis=1,how="all")
                 data_review=data_review.dropna(axis=0)
+                if 'errors' in data_review.columns:
+                    self.error_list=data_review.pop('errors')
+                else:
+                    self.error_list=None
                 self.multi_is = False
                 if len(data_review.columns) == 2:
                     data_review.columns = ["pH", "volume"]
@@ -934,6 +938,10 @@ class Ui_MainWindow(object):
                 data_review = pd.read_csv(filename[0])
                 data_review=data_review.dropna(axis=1,how="all")
                 data_review=data_review.dropna(axis=0)
+                if 'errors' in data_review.columns:
+                    self.error_list=data_review.pop('errors')
+                else:
+                    self.error_list=None
                 self.multi_is_ad = False
                 if self.checkBox.isChecked() == False:
                     second_col = "amounts"
@@ -1070,7 +1078,7 @@ class Ui_MainWindow(object):
             self.pushButton_opt.setEnabled(False)
             self.comboBox_mdl.setEnabled(False)
             self.work.set_pa(pt, self.ph_res, int(self.lineEdit_iter.text()), int(self.lineEdit_temp.text()), mix=0,
-                             method=self.method_selected, process_num=num_process,task=task_name)
+                             method=self.method_selected, process_num=num_process,task=task_name,error_list=self.error_list)
             self.work.signals.connect(self.display_results)
             self.work.start()
             self.pushButton_stp.setEnabled(True)
@@ -1329,7 +1337,7 @@ class Ui_MainWindow(object):
                 self.comboBox_mdl_2.setEnabled(False)
                 self.work2.set_pa(problem, self.ph_res_ad, int(self.lineEdit_iter_2.text()),
                                   int(self.lineEdit_temp_2.text()), mix=0, method=self.method_selected,
-                                  process_num=num_process,task=task_name)
+                                  process_num=num_process,task=task_name,error_list=self.error_list)
                 self.work2.signals.connect(self.display_results2)
                 self.work2.start()
             else:
@@ -1347,7 +1355,7 @@ class Ui_MainWindow(object):
                 self.work2.set_pa(problem, self.ph_res_ad, int(self.lineEdit_iter_2.text()),
                                   int(self.lineEdit_temp_2.text()),
                                   mix=mix, ph_list=self.mix_data_ad, eq=self.textEdit.toPlainText(),
-                                  method=self.method_selected, process_num=num_process,task=task_name)
+                                  method=self.method_selected, process_num=num_process,task=task_name,error_list=self.error_list)
                 self.work2.signals.connect(self.display_results2)
                 self.work2.start()
             self.pushButton_stp_2.setEnabled(True)
@@ -1478,7 +1486,7 @@ class WorkThreadAdvanced(QThread):
     def __int__(self):
         super(WorkThreadAdvanced, self).__init__()
 
-    def set_pa(self, p1, p2, max_t, T, mix, ph_list=None, eq=None, method="Differential evolution", process_num=1,task=None):
+    def set_pa(self, p1, p2, max_t, T, mix, ph_list=None, eq=None, method="Differential evolution", process_num=1,task=None,error_list=None):
         self.p1 = p1
         self.p2 = p2
         self.max_t = max_t
@@ -1491,6 +1499,7 @@ class WorkThreadAdvanced(QThread):
         self.method = method
         self.processes = process_num
         self.task_name=task
+        self.error_list = error_list
 
     def run(self):
         # args for proto_fun is exp_data,titration:Adsorption,mix=ture
@@ -1520,14 +1529,14 @@ class WorkThreadAdvanced(QThread):
             res_str = ""
 
             eva = mc.advanced_evaluation(exp_data=self.p2, titration=self.p1, results=results, mix=mix, eq=self.eq,
-                                         ph_list=self.ph_list, auto_p=auto_ph)
+                                         ph_list=self.ph_list, auto_p=auto_ph, error=self.error_list)
             res_str += "Optimized parameters: "
             for x in results.x:
                 res_str += str(x) + "  "
-            res_str += "\n" + "R2" + "\t" + "adj. R2" + "\t" + "BIC" + "\t" + "RMSE" + "\t" + "Evaluations" + "\n"
+            res_str += "\n" + "R2" + "\t" + "adj. R2" + "\t" + "BIC"  + "\t" + "RMSE" + "\t" + "V(X)"+ "\t" + "Evaluations" + "\n"
             for y in eva[0:3]:
                 res_str += "{:.5f}".format(y) + "\t"
-            res_str += "{:.3e}".format(eva[3]) + "\t" + str(eva[4])
+            res_str += "{:.3e}".format(eva[3]) + "\t" + "{:.3e}".format(eva[8]) + "\t" + str(eva[4])
             # write_results(self.p2, eva[4],self.output_folder)
             self.msg["Task"]="Task: "+self.task_name
             self.msg["successful"] = True

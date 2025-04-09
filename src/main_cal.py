@@ -496,7 +496,7 @@ def proto_fun(p, exp_data, titration: Adsorption, mix=False):
     return np.linalg.norm(error)
 
 
-def advanced_evaluation(exp_data, results, titration: Adsorption, mix=False, auto_p=False, eq=None, ph_list=None):
+def advanced_evaluation(exp_data, results, titration: Adsorption, mix=False, auto_p=False, eq=None, ph_list=None,error=None):
     p = results.x
     titration.set_para(p)
 
@@ -514,7 +514,16 @@ def advanced_evaluation(exp_data, results, titration: Adsorption, mix=False, aut
     adj_r2 = 1 - (1 - raw_r2) * (len(exp_data) - 1) / (len(exp_data) - 1 - len(p))
     rms = results.fun / len(exp_data) ** 0.5
     BIC = len(exp_data) * np.log(results.fun ** 2 / len(exp_data)) + np.log(len(exp_data)) * len(p)
-    return raw_r2, adj_r2, BIC, rms, results.nfev, model_res, titration.sms, all_output
+    if error is None:
+        if mix is False:
+            error_list=exp_data*0.01
+        else:
+            # error_list=np.full(len(exp_data), 0.005)
+            error_list=exp_data*0.02303
+    else:
+        error_list=error
+    reduced_chi=reduced_x2(exp_data, model_res,error_list,len(exp_data)-len(p))
+    return raw_r2, adj_r2, BIC, rms, results.nfev, model_res, titration.sms, all_output,reduced_chi
 
 
 def run_phreeqc_ad(titration: Adsorption):
@@ -538,10 +547,10 @@ def run_phreeqc_eval(titration: Adsorption):
     prc.destroy_iphreeqc()
     return sel_output
 
-def reduced_x2(exp_data, model_data, variance, f):
+def reduced_x2(exp_data, model_data, error, f):
     ssd = 0
     for i in range(0, len(exp_data)):
-        ssd += (model_data(i) - exp_data[i]) ** 2 / variance[i]
+        ssd += ((model_data[i] - exp_data[i])/ error[i])**2
     return ssd / f
 
 
