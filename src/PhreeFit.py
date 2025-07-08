@@ -1533,7 +1533,7 @@ class WorkThreadAdvanced(QThread):
             res_str += "Optimized parameters: "
             for x in results.x:
                 res_str += str(x) + "  "
-            res_str += "\n" + "R2" + "\t" + "adj. R2" + "\t" + "BIC"  + "\t" + "RMSE" + "\t" + "V(X)"+ "\t" + "Evaluations" + "\n"
+            res_str += "\n" + "R2" + "\t" + "adj. R2" + "\t" + "BIC"  + "\t" + "RMSE" + "\t" + "V(Y)"+ "\t" + "Evaluations" + "\n"
             for y in eva[0:3]:
                 res_str += "{:.5f}".format(y) + "\t"
             res_str += "{:.3e}".format(eva[3]) + "\t" + "{:.3e}".format(eva[8]) + "\t" + str(eva[4])

@@ -516,7 +516,7 @@ def advanced_evaluation(exp_data, results, titration: Adsorption, mix=False, aut
     BIC = len(exp_data) * np.log(results.fun ** 2 / len(exp_data)) + np.log(len(exp_data)) * len(p)
     if error is None:
         if mix is False:
-            error_list=exp_data*0.01
+            error_list=exp_data*0.05
         else:
             # error_list=np.full(len(exp_data), 0.005)
             error_list=exp_data*0.02303
