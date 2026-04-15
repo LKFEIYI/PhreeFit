@@ -11,19 +11,33 @@ with open(database_path,"r",encoding="UTF-8") as file:
     database=file.read()
 
 
-data=np.loadtxt("actec.csv",delimiter=",",skiprows=1)
+data=np.loadtxt("bacteria.csv",delimiter=",",skiprows=1)
 
-simple_species=main_cal.SurfaceSpecies2()
-simple_species.add_surface("Surf","SurfOH",(0,0.01),1,1,1,1,0.001,1,1)
-simple_species.add_reactions("SurfOH = SurfO- + H+",(-11,-2),1,True,1,-5,-1)
-titration=main_cal.Adsorption("NEM")
+simple_species1=main_cal.SurfaceSpecies2()
+simple_species2=main_cal.SurfaceSpecies2()
+simple_species3=main_cal.SurfaceSpecies2()
+
+simple_species1.add_surface("Surf_a","Surf_aH",(0,0.01),140,0.9705,1,1,0.001,1,1)
+simple_species1.add_reactions("Surf_aH = Surf_a- + H+",(-11,-2),1,True,1,-5,-1)
+simple_species2.add_surface("Surf_b","Surf_bH",(0,0.01),140,0.9705,1,1,0.001,1,1)
+simple_species2.add_reactions("Surf_bH = Surf_b- + H+",(-11,-2),1,True,1,-5,-1)
+simple_species3.add_surface("Surf_c","Surf_cH",(0,0.01),140,0.9705,(0,5),1,0.001,1,1)
+simple_species3.add_reactions("Surf_cH = Surf_c- + H+",(-11,-2),1,True,1,-5,-1)
+
+
+titration=main_cal.Adsorption("CCM")
 titration.species_definition(database,"")
-titration.initial_solution([0.1],initial_pH=3.065,cation="Na",anion="Cl",metal={})
-titration.add_surface(simple_species)
+titration.initial_solution([0.1],initial_pH=2.449,cation="Na",anion="Cl",metal={})
+
+titration.add_surface(simple_species1)
+titration.add_surface(simple_species2)
+titration.add_surface(simple_species3)
+
+
 titration.selected_output({})
 titration.set_type_acid(type_base="NaOH",type_acid="HNO3")
 titration.mix_solution(type_solution="dissolution",base_mass=0.993)
-titration.mix_action(initial_volume=10.5768,mix_volume=data[:,1])
+titration.mix_action(initial_volume=6.509,mix_volume=data[:,1])
 titration.get_bounds()
 
 stras = ['best1bin', 'best1exp', 'rand1bin', 'rand1exp', 'rand2bin', 'rand2exp', 'randtobest1bin', 'randtobest1exp',
@@ -36,25 +50,20 @@ param_grid = {
     'recombination': recoms,
     'run_id': list(range(50))
 }
-from scipy import optimize
+
 all_params = list(ParameterGrid(param_grid))
-for i in range(0,50):
-    result = de_opt(main_cal.proto_fun, bounds=np.array(titration.bounds), args=(data[:, 0], titration, True),disp=True,polish=False)
-    print(result.x)
-    if result.fun > 0.3:
-        print("bad"+str(result.fun))
-        result2=optimize.minimize(main_cal.proto_fun, bounds=np.array(titration.bounds), x0=result.x,args=(data[:, 0], titration, True),method="Nelder-Mead",options={"adaptive":True})
-        print(result2.x,result2.fun)
-        if result2.fun > 0.3:
-            print('can not')
-            break
+
+result = de_opt(main_cal.proto_fun, bounds=np.array(titration.bounds), args=(data[:, 0], titration, True),polish=False)
+
+from scipy import optimize
+result2=optimize.minimize(main_cal.proto_fun, bounds=np.array(titration.bounds), x0=result.x,args=(data[:, 0], titration, True),method="Nelder-Mead",options={"adaptive":True,"maxiter":3000})
 
 
-
+result3=optimize.minimize(main_cal.proto_fun, bounds=np.array(titration.bounds), x0=result.x,args=(data[:, 0], titration, True),method="L-BFGS-B",jac="3-point")
 # def run_single_experiment(param):
 #     try:
 #         # 为每次运行生成唯一随机种子
-#         np.random.seed((param['run_id'] + 1) * 42)  # 种子 = (run_id+1)*固定基数
+#         # np.random.seed((param['run_id'] + 1) * 42)  # 种子 = (run_id+1)*固定基数
 #         start_time = time.time()
 #
 #         # 运行DE算法
@@ -87,9 +96,9 @@ for i in range(0,50):
 #             'time': -1,
 #             'error': str(e)
 #         }
-
-
-# 多进程执行（主程序）
+#
+#
+# # 多进程执行（主程序）
 # if __name__ == '__main__':
 #     num_workers = 2  # 根据CPU核心数调整
 #     results = []
