@@ -4,6 +4,10 @@ import phreeqpy.iphreeqc.phreeqc_dll as phc_mod
 from scipy.optimize import dual_annealing, differential_evolution, minimize
 
 
+class OptimizationCancelled(Exception):
+    """Raised when the user requests that an optimization stop safely."""
+
+
 class SurfaceSpecies2:
     def __init__(self):
         self.surface_name = None
@@ -37,7 +41,7 @@ class SurfaceSpecies2:
     #
     def get_all_species(self):
         if len(self.surface_reactions) == 0:
-            return None
+            return []
         else:
             species_list = []
             for keys in self.surface_reactions.keys():
@@ -286,6 +290,7 @@ class Adsorption:
     def get_bounds(self):
         self.bounds.clear()
         self.initial_guess.clear()
+        self.all_surfacespecies.clear()
         for sp in self.surface:
             self.all_surfacespecies += sp.get_all_species()
             if isinstance(sp.surface_sites, tuple) == True:
@@ -316,7 +321,7 @@ class Adsorption:
                     self.initial_guess.append(sp.sfinitial[1])
                 if isinstance(sp.surface_C2, tuple) == True:
                     self.bounds.append(sp.surface_C2)
-                    self.initial_guess.append(sp.sfinitial[1])
+                    self.initial_guess.append(sp.sfinitial[2])
 
     def set_para(self, unknowns):
         self.sms = ""
@@ -564,7 +569,8 @@ def r2(exp_data, model_data):
     return 1 - sse / sst
 
 
-def optimize_problem(mix_or_eq, method, x0, bounds, maxiter=1000, core=1, t=5230, extra_para=None):
+def optimize_problem(mix_or_eq, method, x0, bounds, maxiter=1000, core=1, t=5230, extra_para=None,
+                     stop_requested=None):
     # args for proto_fun is exp_data,titration:Adsorption,mix=ture
     # args for advanced_fun is exp_data, titration:Adsorption,mix=False
     # args for advanced_fun_auto is exp_data,ph_list,eq_phase, titration:Adsorption,mix=False
@@ -575,6 +581,12 @@ def optimize_problem(mix_or_eq, method, x0, bounds, maxiter=1000, core=1, t=5230
         residual_func = advanced_fun
     else:
         residual_func = advanced_fun_auto
+
+    def check_cancelled(*args, **kwargs):
+        if stop_requested is not None and stop_requested():
+            raise OptimizationCancelled("Terminated by user")
+
+    check_cancelled()
     if method == "Differential evolution":
         param_de = {
             'strategy': "best1bin",
@@ -589,21 +601,28 @@ def optimize_problem(mix_or_eq, method, x0, bounds, maxiter=1000, core=1, t=5230
             }
         if core > 1:
             de_results = differential_evolution(residual_func, bounds=bounds, x0=x0, maxiter=maxiter, updating="deferred",
-                                              workers=core, args=extra_para,polish=False,**param_de)
+                                              workers=core, args=extra_para, polish=False,
+                                              callback=check_cancelled, **param_de)
         else:
-            de_results = differential_evolution(residual_func, bounds=bounds, x0=x0, maxiter=maxiter, args=extra_para,polish=False,**param_de)
-        polished_results = minimize(residual_func, options={"adaptive":True} ,bounds=bounds, x0=de_results.x, method="Nelder-Mead", args=extra_para)
+            de_results = differential_evolution(residual_func, bounds=bounds, x0=x0, maxiter=maxiter,
+                                                args=extra_para, polish=False, callback=check_cancelled, **param_de)
+        check_cancelled()
+        polished_results = minimize(residual_func, options={"adaptive": True}, bounds=bounds, x0=de_results.x,
+                                    method="Nelder-Mead", args=extra_para, callback=check_cancelled)
         if polished_results.success and polished_results.fun < de_results.fun:
             results=polished_results
             results.nfev += de_results.nfev
         else:
             results=de_results
     elif method == "Dual annealing":
-        results = dual_annealing(residual_func, bounds=bounds, x0=x0, maxiter=maxiter, initial_temp=t, args=extra_para)
+        results = dual_annealing(residual_func, bounds=bounds, x0=x0, maxiter=maxiter, initial_temp=t,
+                                 args=extra_para, callback=check_cancelled)
     elif method == "Nelder Mead":
-        results = minimize(residual_func, options={"adaptive":True} ,bounds=bounds, x0=x0, method="Nelder-Mead", args=extra_para)
+        results = minimize(residual_func, options={"adaptive": True}, bounds=bounds, x0=x0,
+                           method="Nelder-Mead", args=extra_para, callback=check_cancelled)
     elif method == "Powell":
-        results = minimize(residual_func,bounds=bounds, x0=x0, method="Powell", args=extra_para)
+        results = minimize(residual_func, bounds=bounds, x0=x0, method="Powell", args=extra_para,
+                           callback=check_cancelled)
     else:
         pass
     return results

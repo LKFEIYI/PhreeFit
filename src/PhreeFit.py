@@ -13,8 +13,10 @@ import main_cal as mc
 import pandas as pd
 import time
 import os
+import threading
 import pyqtgraph as pg
-from PySide6.QtCore import (QCoreApplication, QMetaObject, QRect, Qt, QThread, QAbstractTableModel, Signal)
+from PySide6.QtCore import (QCoreApplication, QMetaObject, QRect, Qt, QThread, QAbstractTableModel,
+                            QStandardPaths, Signal)
 from PySide6.QtGui import (QAction, QFont, QIntValidator, QDoubleValidator)
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QGroupBox, QLabel, QLineEdit, QMainWindow,
                                QMenu, QMenuBar, QPushButton, QRadioButton, QStackedWidget, QStatusBar, QTableView,
@@ -1040,7 +1042,7 @@ class Ui_MainWindow(object):
             # print(self.output_folder)
             task_name = QInputDialog.getText(None, "Task name", "Input here")[0]
             self.config_file.update_config_file([self.data_folder,self.database_folder,self.output_folder])
-            num_process = min([int(self.lineEdit_cycle.text(), multiprocessing.cpu_count())])
+            num_process = max(1, min(int(self.lineEdit_cycle.text()), multiprocessing.cpu_count()))
             pt = mc.Adsorption(self.comboBox_mdl.currentText())
             if self.multi_is == False:
                 Na = [float(self.lineEdit_cs.text())]
@@ -1092,7 +1094,10 @@ class Ui_MainWindow(object):
         self.comboBox_mdl.setEnabled(True)
         self.pushButton_stp.setEnabled(False)
 
-        if ssss["successful"] == True:
+        if ssss.get("cancelled", False):
+            self.textEdit_res.append(ssss["Task"] + '\n' + ssss["error"] + "\n")
+            write_log(ssss["Task"] + '\n' + ssss["error"], self.output_folder)
+        elif ssss["successful"] == True:
             if ssss["iterations"] < int(self.lineEdit_iter.text()) and self.method_selected == "Differential evolution":
                 QMessageBox.information(None, "warning", "The iterations of DE method is rather few, please rerun or change some settings",
                                         QMessageBox.Yes | QMessageBox.No)
@@ -1154,11 +1159,9 @@ class Ui_MainWindow(object):
                 j += len(x1)
 
     def stop_thread(self):
-        self.work.terminate()
-        write_log("Terminated by user", self.output_folder)
-        self.pushButton_stp.setEnabled(False)
-        self.pushButton_opt.setEnabled(True)
-        self.comboBox_mdl.setEnabled(True)
+        if hasattr(self, "work") and self.work.isRunning():
+            self.work.request_stop()
+            self.pushButton_stp.setEnabled(False)
 
     def advanced_view(self):
         self.stackedWidget.setCurrentIndex(2)
@@ -1294,7 +1297,7 @@ class Ui_MainWindow(object):
         try:
             self.config_file.update_config_file([self.data_folder, self.database_folder, self.output_folder])
             task_name = QInputDialog.getText(None, "Task name", "Input here")[0]
-            num_process = min([int(self.lineEdit_cycle_2.text(),multiprocessing.cpu_count())])
+            num_process = max(1, min(int(self.lineEdit_cycle_2.text()), multiprocessing.cpu_count()))
             problem = mc.Adsorption(self.comboBox_mdl_2.currentText())
             if self.multi_is_ad == False:
                 Na = [float(self.lineEdit_cs_2.text())]
@@ -1369,7 +1372,10 @@ class Ui_MainWindow(object):
         self.comboBox_mdl_2.setEnabled(True)
         self.pushButton_stp_2.setEnabled(False)
 
-        if ssss["successful"] == True:
+        if ssss.get("cancelled", False):
+            self.textEdit_res_2.append(ssss["Task"] + '\n' + ssss["error"] + "\n")
+            write_log(ssss["Task"] + '\n' + ssss["error"], self.output_folder)
+        elif ssss["successful"] == True:
             if ssss["iterations"] < int(self.lineEdit_iter_2.text()) and self.method_selected == "Differential evolution":
                 QMessageBox.information(None, "warning", "The iterations of DE method is rather few, please rerun or change some settings",
                                         QMessageBox.Yes | QMessageBox.No)
@@ -1384,11 +1390,9 @@ class Ui_MainWindow(object):
             write_log(ssss["Task"]+'\n'+ssss["error"], self.output_folder)
 
     def stop_thread2(self):
-        self.work2.terminate()
-        write_log("Terminated by user", self.output_folder)
-        self.pushButton_stp_2.setEnabled(False)
-        self.pushButton_opt_2.setEnabled(True)
-        self.comboBox_mdl_2.setEnabled(True)
+        if hasattr(self, "work2") and self.work2.isRunning():
+            self.work2.request_stop()
+            self.pushButton_stp_2.setEnabled(False)
 
     def dual_annealing(self):
         self.actiondifferential_evolution.setChecked(False)
@@ -1483,8 +1487,16 @@ class Ui_MainWindow(object):
 class WorkThreadAdvanced(QThread):
     signals = Signal(dict)
 
-    def __int__(self):
+    def __init__(self):
         super(WorkThreadAdvanced, self).__init__()
+        self._stop_event = threading.Event()
+
+    def request_stop(self):
+        self._stop_event.set()
+        self.requestInterruption()
+
+    def stop_requested(self):
+        return self._stop_event.is_set() or self.isInterruptionRequested()
 
     def set_pa(self, p1, p2, max_t, T, mix, ph_list=None, eq=None, method="Differential evolution", process_num=1,task=None,error_list=None):
         self.p1 = p1
@@ -1524,10 +1536,12 @@ class WorkThreadAdvanced(QThread):
             st_eva_t = time.time()
             results = mc.optimize_problem(self.mix_or_eq, method=self.method, x0=np.array(self.p1.initial_guess),
                                           bounds=self.p1.bounds, maxiter=self.max_t, core=self.processes, t=self.T,
-                                          extra_para=fix_para)
+                                          extra_para=fix_para, stop_requested=self.stop_requested)
             ed_eva_t = time.time()
             res_str = ""
 
+            if self.stop_requested():
+                raise mc.OptimizationCancelled("Terminated by user")
             eva = mc.advanced_evaluation(exp_data=self.p2, titration=self.p1, results=results, mix=mix, eq=self.eq,
                                          ph_list=self.ph_list, auto_p=auto_ph, error=self.error_list)
             res_str += "Optimized parameters: "
@@ -1547,6 +1561,12 @@ class WorkThreadAdvanced(QThread):
             self.msg["time"] = "Time: {:.2f} s".format(ed_eva_t - st_eva_t)
             self.msg["speciation"]=eva[7]
             self.msg["iterations"] = eva[4]
+            self.signals.emit(self.msg)
+        except mc.OptimizationCancelled as e:
+            self.msg["Task"] = "Task: " + self.task_name
+            self.msg["successful"] = False
+            self.msg["cancelled"] = True
+            self.msg["error"] = str(e)
             self.signals.emit(self.msg)
         except Exception as e:
             self.msg["Task"] = self.task_name
@@ -1586,14 +1606,23 @@ class ConfigFile:
         self.data_directory = None
         self.database_directory = None
         self.output_directory = None
-        self.install_path = os.path.split(os.path.realpath(__file__))[0]
-        self.config_file = os.path.join(self.install_path, "config")
-        # print(self.config_file)
+        config_directory = QStandardPaths.writableLocation(QStandardPaths.AppConfigLocation)
+        if not config_directory:
+            config_directory = os.path.join(os.path.expanduser("~"), ".phreefit")
+        os.makedirs(config_directory, exist_ok=True)
+        self.config_file = os.path.join(config_directory, "config")
+
+    @staticmethod
+    def default_directories():
+        user_directory = QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation)
+        if not user_directory or not os.path.isdir(user_directory):
+            user_directory = os.path.expanduser("~")
+        output_directory = os.path.join(user_directory, "PhreeFit")
+        os.makedirs(output_directory, exist_ok=True)
+        return [user_directory, user_directory, output_directory]
+
     def create_config_file(self):
-        with open(self.config_file,"w") as f:
-            f.write(os.getcwd() + "\n")
-            f.write(os.getcwd() + "\n")
-            f.write(os.getcwd() + "\n")
+        self.update_config_file(self.default_directories())
 
     def load_config_file(self):
         # check the config file in the folder
@@ -1601,27 +1630,36 @@ class ConfigFile:
         # print(os.path.isfile(self.config_file))
         if not os.path.isfile(self.config_file):
             self.create_config_file()
-        with open(self.config_file, "r") as f:
+        with open(self.config_file, "r", encoding="utf-8") as f:
             config_content = f.readlines()
 
         #check the number of lines in the file, must be 3
         if len(config_content) != 3:
             self.create_config_file()
-            with open(self.config_file, "r") as f:
+            with open(self.config_file, "r", encoding="utf-8") as f:
                 config_content = f.readlines()
 
         # data/work directory, database directory, and output directory
-        for i in range(0,3):
+        defaults = self.default_directories()
+        config_changed = False
+        for i in range(0, 3):
             if not os.path.isdir(config_content[i].strip()):
-                config_content[i] = os.getcwd()
+                config_content[i] = defaults[i]
+                config_changed = True
         self.data_directory = config_content[0].strip()
         self.database_directory = config_content[1].strip()
         self.output_directory = config_content[2].strip()
+        if config_changed:
+            self.update_config_file([
+                self.data_directory,
+                self.database_directory,
+                self.output_directory,
+            ])
 
 
     def update_config_file(self,path_list:list):
         # print(path_list)
-        with open(self.config_file,"w") as f:
+        with open(self.config_file, "w", encoding="utf-8") as f:
             f.write(path_list[0]+"\n")
             f.write(path_list[1]+"\n")
             f.write(path_list[2]+"\n")
@@ -1661,6 +1699,8 @@ if __name__ == "__main__":
 
     multiprocessing.freeze_support()
     app = QApplication(sys.argv)
+    app.setOrganizationName("PhreeFit")
+    app.setApplicationName("PhreeFit")
     MainWindow = MyWindow()
     ui = Ui_MainWindow()
     ui.setupUi(MainWindow)
