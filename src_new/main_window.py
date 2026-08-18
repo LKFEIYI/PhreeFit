@@ -91,8 +91,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.database_folder = self.config_file.database_directory
         self.output_folder = self.config_file.output_directory
         self.data_folder = self.config_file.data_directory
-        self.history_folder = os.path.join(os.path.dirname(self.config_file.config_file), "history")
-        os.makedirs(self.history_folder, exist_ok=True)
+        self.history_folder = self.output_folder
 
     def _connect_signals(self):
         self.pushButton_db.clicked.connect(self.load_database)
@@ -120,6 +119,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.actionDual_annealing.triggered.connect(self.dual_annealing)
         self.actionnelder_mead.triggered.connect(self.nelder_mead)
         self.checkBox.stateChanged.connect(self.label_change_2)
+        self.checkBox.stateChanged.connect(self._reload_advanced_data_for_mode)
         self.radioButton_fx_2.toggled.connect(self.label_change_2)
         self.radioButton_ds_2.toggled.connect(self.label_change_2)
         self.radioButton_ds.toggled.connect(self.label_change_1)
@@ -143,6 +143,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.pushButton_opt_2.setEnabled(not running)
         self.comboBox_mdl.setEnabled(not running)
         self.comboBox_mdl_2.setEnabled(not running)
+        self.checkBox.setEnabled(not running)
         self.pushButton_stp.setEnabled(running and mode == "titration")
         self.pushButton_stp_2.setEnabled(running and mode == "advanced")
 
@@ -186,7 +187,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
 
     def compare_history(self):
-        log_path = os.path.join(self.output_folder, "phreefit_log.txt")
+        output_folder = self._configured_history_folder()
+        log_path = os.path.join(output_folder, "phreefit_log.txt")
         try:
             records = read_optimization_history(log_path)
         except (OSError, UnicodeError, ValueError) as error:
@@ -201,6 +203,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return
         dialog = HistoryComparisonDialog(records, log_path, self)
         dialog.exec()
+
+    def _configured_history_folder(self):
+        """Use the Output path persisted in the user configuration for History."""
+        self.config_file.load_config_file()
+        self.output_folder = self.config_file.output_directory
+        self.history_folder = self.output_folder
+        return self.history_folder
 
     def showOpendialog(self):
         path = QFileDialog.getOpenFileName(self, "Open data", dir=self.data_folder)[0]
@@ -253,6 +262,22 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.tableView_2.setModel(TableModel(data.table))
         self.advanced_data_path = os.path.abspath(path)
         self.data_folder = os.path.dirname(self.advanced_data_path)
+
+    def _reload_advanced_data_for_mode(self, _state=None):
+        """Reinterpret the current Advanced CSV when Titration mode changes."""
+        if not self.advanced_data_path:
+            return
+        path = self.advanced_data_path
+        try:
+            self._load_advanced_data(path)
+        except Exception as error_msg:
+            self._clear_advanced_data(path)
+            write_log(str(error_msg), self.output_folder)
+            QMessageBox.warning(
+                self,
+                "Advanced data",
+                "Unable to reload the current data for the selected mode:\n" + str(error_msg),
+            )
 
     def _load_database_file(self, path):
         self.database = read_database(path)
@@ -346,6 +371,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         }
 
     def save_settings(self):
+        self._configured_history_folder()
         snapshot = self._settings_snapshot()
         active_mode = snapshot["active_mode"]
         default_path = os.path.join(self.output_folder, active_mode + "_settings.json")
@@ -356,7 +382,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             path += ".json"
         try:
             save_settings_file(path, snapshot)
-            self.history_folder = os.path.dirname(os.path.abspath(path))
             QMessageBox.information(self, "History", "Settings saved successfully")
         except Exception as error_msg:
             write_log(str(error_msg), self.output_folder)
@@ -387,7 +412,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.tableView_2.setModel(None)
 
     def load_settings(self):
-        path = QFileDialog.getOpenFileName(self, "Load settings", self.history_folder, "JSON files (*.json)")[0]
+        history_folder = self._configured_history_folder()
+        path = QFileDialog.getOpenFileName(self, "Load settings", history_folder, "JSON files (*.json)")[0]
         if not path:
             return
         try:
@@ -404,7 +430,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     setattr(self, attribute, directory)
 
             self._restore_widgets(titration.get("widgets", {}))
-            self._restore_widgets(advanced.get("widgets", {}))
+            check_box_was_blocked = self.checkBox.blockSignals(True)
+            try:
+                self._restore_widgets(advanced.get("widgets", {}))
+            finally:
+                self.checkBox.blockSignals(check_box_was_blocked)
             self.op_obj = [deserialize_surface(item) for item in titration.get("surfaces", [])]
             self.opad = [deserialize_surface(item) for item in advanced.get("surfaces", [])]
 
@@ -457,7 +487,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.titration_view()
 
             self.config_file.update_config_file([self.data_folder, self.database_folder, self.output_folder])
-            self.history_folder = os.path.dirname(os.path.abspath(path))
+            self.history_folder = self.output_folder
             if load_warnings:
                 QMessageBox.warning(
                     self,
@@ -1095,7 +1125,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.data_folder = QFileDialog.getExistingDirectory(None, "Open data", dir=self.data_folder)
 
     def set_output_folder(self):
-        self.output_folder = QFileDialog.getExistingDirectory(None, "Output to:", dir=self.output_folder)
+        selected_folder = QFileDialog.getExistingDirectory(None, "Output to:", dir=self.output_folder)
+        if not selected_folder:
+            return
+        self.output_folder = selected_folder
+        self.history_folder = selected_folder
+        self.config_file.update_config_file([
+            self.data_folder,
+            self.database_folder,
+            self.output_folder,
+        ])
 
     def enable_surf_eq(self):
         if self.stackedWidget.currentIndex() == 2 and self.checkBox.isChecked() == False:
