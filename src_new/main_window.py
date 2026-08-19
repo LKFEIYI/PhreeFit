@@ -7,7 +7,7 @@ import time
 import pyqtgraph as pg
 from pyqtgraph.exporters import ImageExporter, SVGExporter
 from PySide6.QtCore import QTimer, Qt
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QColor, QFont, QTextCharFormat
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QFileDialog, QInputDialog, QLineEdit, QMainWindow,
     QHBoxLayout, QLabel, QMessageBox, QPushButton, QRadioButton, QTextEdit, QWidget,
@@ -738,6 +738,30 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.op_obj.pop(sp_name.index(self.lineEdit_sname.text().strip().capitalize()))
                 self.op_obj.append(self.add_surface())
 
+    @staticmethod
+    def _format_init_guess(initial, bounds, parameter, indent=""):
+        warning = ""
+        if isinstance(bounds, tuple) and len(bounds) >= 2:
+            try:
+                if initial < bounds[0] or initial > bounds[1]:
+                    warning = "  OUT OF BOUNDS"
+            except TypeError:
+                pass
+        return f"{indent}initial {parameter}: {initial}{warning}\n"
+
+    @staticmethod
+    def _highlight_bounds_warnings(text_edit):
+        """Emphasize bounds warnings without changing the plain-text layout."""
+        warning_text = "OUT OF BOUNDS"
+        warning_format = QTextCharFormat()
+        warning_format.setForeground(QColor("#c62828"))
+        warning_format.setFontWeight(QFont.Weight.Bold)
+        document = text_edit.document()
+        cursor = document.find(warning_text)
+        while not cursor.isNull():
+            cursor.mergeCharFormat(warning_format)
+            cursor = document.find(warning_text, cursor)
+
     def show_surface(self):
         surface_reaction = ""
         if self.actionEnabled.isChecked() == True and self.surf_eq is not None:
@@ -746,14 +770,29 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                                 + "IS:" + str(self.surf_eq[1]) + ")\n"
         for obj in self.op_obj:
             surface_reaction += obj.surface_name + "\n"
-            surface_reaction += str(obj.sfinitial[0]) + " bounds: " + str(obj.surface_sites[0]) + " - " + str(
+            surface_reaction += self._format_init_guess(
+                obj.sfinitial[0], obj.surface_sites, "Sites"
+            )
+            surface_reaction += "bounds: " + str(obj.surface_sites[0]) + " - " + str(
                 obj.surface_sites[1]) + "\n"
+            if self.comboBox_mdl.currentText() == "CCM":
+                surface_reaction += self._format_init_guess(
+                    obj.sfinitial[1], obj.surface_C1, "C1"
+                )
+                surface_reaction += "C1 bounds: " + str(obj.surface_C1[0]) + " - " + str(
+                    obj.surface_C1[1]) + "\n"
             for react in obj.surface_reactions.keys():
                 surface_reaction += react + "\n"
-                surface_reaction += "\t" + "initial_log_k: " + str(obj.surface_reactions[react][4]) + "\n"
+                surface_reaction += self._format_init_guess(
+                    obj.surface_reactions[react][4],
+                    obj.surface_reactions[react][0],
+                    "log_k",
+                    "\t",
+                )
                 surface_reaction += "\t" + "log_k bounds: " + str(obj.surface_reactions[react][0][0]) + " - " + str(
                     obj.surface_reactions[react][0][1]) + "\n"
         self.textEdit_sf.setText(surface_reaction)
+        self._highlight_bounds_warnings(self.textEdit_sf)
 
     def optimize_data(self):
         if self._optimization_busy():
@@ -1152,25 +1191,53 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                                 + "IS:" + str(self.surf_eq[1]) + ")\n"
         for obj in self.opad:
             surface_reaction += obj.surface_name + "\n"
-            if self.comboBox_mdl_2.currentText() == "CCM":
+            model = self.comboBox_mdl_2.currentText()
+            if isinstance(obj.surface_sites, tuple):
+                surface_reaction += self._format_init_guess(
+                    obj.sfinitial[0], obj.surface_sites, "Sites", "\t"
+                )
+            if model in ("CCM", "CDMUSIC") and isinstance(obj.surface_C1, tuple):
+                surface_reaction += self._format_init_guess(
+                    obj.sfinitial[1], obj.surface_C1, "C1", "\t"
+                )
+            if model == "CDMUSIC" and isinstance(obj.surface_C2, tuple):
+                surface_reaction += self._format_init_guess(
+                    obj.sfinitial[2], obj.surface_C2, "C2", "\t"
+                )
+            if model == "CCM":
                 surface_reaction += str(obj.surface_sites) + " ccm: " + str(obj.surface_C1) + "\n"
-            elif self.comboBox_mdl_2.currentText() == "CDMUSIC":
+            elif model == "CDMUSIC":
                 surface_reaction += str(obj.surface_sites) + " c1: " + str(obj.surface_C1) + " " + \
                                     " c2: " + str(obj.surface_C2) + "\n"
             else:
                 surface_reaction += str(obj.surface_sites) + "\n"
             for react in obj.surface_reactions.keys():
                 surface_reaction += react + "\n"
+                if isinstance(obj.surface_reactions[react][0], tuple):
+                    surface_reaction += self._format_init_guess(
+                        obj.surface_reactions[react][4],
+                        obj.surface_reactions[react][0],
+                        "log_k",
+                        "\t",
+                    )
                 surface_reaction += "\t" + "log_k: " + str(obj.surface_reactions[react][0]) + "\n"
-                if self.comboBox_mdl_2.currentText() == "CDMUSIC":
+                if model == "CDMUSIC":
                     if obj.surface_reactions[react][2] == True:
                         location = "z0+z1"
                     else:
                         location = "z1+zd"
+                    if isinstance(obj.surface_reactions[react][1], tuple):
+                        surface_reaction += self._format_init_guess(
+                            obj.surface_reactions[react][5],
+                            obj.surface_reactions[react][1],
+                            "z1",
+                            "\t",
+                        )
                     surface_reaction += "\t" + "z1: " + str(
                         obj.surface_reactions[react][1]) + " location:" + location + " " + str(
                         obj.surface_reactions[react][3]) + "\n"
         self.textEdit_sf_2.setText(surface_reaction)
+        self._highlight_bounds_warnings(self.textEdit_sf_2)
 
     def clear_all(self):
         self.opad.clear()
