@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Version = "0.0.0",
+    [string]$Version = "",
     [string]$Python = "python",
     [string]$InnoSetupCompiler = "",
     [switch]$SkipInstaller
@@ -14,6 +14,17 @@ $StageRoot = Join-Path $BuildRoot "stage"
 $StageSource = Join-Path $StageRoot "src_new"
 $DistRoot = Join-Path $ProjectRoot "dist\windows"
 $PortableDir = Join-Path $DistRoot "PhreeFit"
+$SourceVersion = & $Python -c "import runpy, sys; print(runpy.run_path(sys.argv[1])['__version__'])" `
+    (Join-Path $ProjectRoot "src_new\version.py")
+if ($LASTEXITCODE -ne 0 -or -not $SourceVersion) {
+    throw "Unable to read the version from src_new\version.py."
+}
+if (-not $Version) {
+    $Version = $SourceVersion
+}
+elseif ($Version -ne $SourceVersion) {
+    throw "Requested version '$Version' does not match src_new\version.py ('$SourceVersion')."
+}
 $ZipPath = Join-Path $DistRoot "PhreeFit-$Version-win-x64.zip"
 
 if ($BuildRoot -ne (Join-Path $ProjectRoot "build\windows") -or

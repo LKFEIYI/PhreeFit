@@ -2,13 +2,19 @@
 import os
 import platform
 from pathlib import Path
+import runpy
 
 from PyInstaller.utils.hooks import get_module_file_attribute
 
 
 project_root = Path(SPECPATH).resolve().parents[1]
 source_dir = Path(os.environ.get("PHREEFIT_SOURCE_DIR", project_root / "src_new")).resolve()
-version = os.environ.get("PHREEFIT_VERSION", "0.0.0")
+source_version = runpy.run_path(str(source_dir / "version.py"))["__version__"]
+version = os.environ.get("PHREEFIT_VERSION", source_version)
+if version != source_version:
+    raise ValueError(
+        f"PHREEFIT_VERSION ({version}) does not match src_new/version.py ({source_version})."
+    )
 architecture = platform.machine()
 
 extension_files = sorted(source_dir.glob("main_cal*.so"))

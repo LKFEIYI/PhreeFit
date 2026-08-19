@@ -6,8 +6,8 @@ import time
 
 import pyqtgraph as pg
 from pyqtgraph.exporters import ImageExporter, SVGExporter
-from PySide6.QtCore import QTimer, Qt
-from PySide6.QtGui import QColor, QFont, QTextCharFormat
+from PySide6.QtCore import QTimer, Qt, QUrl
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QTextCharFormat
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QFileDialog, QInputDialog, QLineEdit, QMainWindow,
     QHBoxLayout, QLabel, QMessageBox, QPushButton, QRadioButton, QTextEdit, QWidget,
@@ -166,6 +166,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.actionSave_settings.triggered.connect(self.save_settings)
         self.actionLoad_settings.triggered.connect(self.load_settings)
         self.actionCompare_results.triggered.connect(self.compare_history)
+        self.actionOpen_output_folder.triggered.connect(self.open_output_folder)
         self.checkBox_show_species.toggled.connect(self._set_species_visibility)
         self.checkBox_species_log.toggled.connect(self._set_species_log_mode)
         self.pushButton_reset_plot.clicked.connect(self._reset_plot_view)
@@ -392,6 +393,22 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return
         dialog = HistoryComparisonDialog(records, log_path, results_path, self)
         dialog.exec()
+
+    def open_output_folder(self):
+        output_folder = self._configured_history_folder()
+        if not output_folder or not os.path.isdir(output_folder):
+            QMessageBox.warning(
+                self,
+                "Open output folder",
+                "The configured output path is unavailable:\n" + str(output_folder),
+            )
+            return
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.abspath(output_folder))):
+            QMessageBox.warning(
+                self,
+                "Open output folder",
+                "The system file browser could not open:\n" + output_folder,
+            )
 
     def _configured_history_folder(self):
         """Use the Output path persisted in the user configuration for History."""

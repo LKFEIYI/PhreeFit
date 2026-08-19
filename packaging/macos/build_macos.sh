@@ -7,9 +7,8 @@ BUILD_ROOT="$PROJECT_ROOT/build/macos"
 STAGE_ROOT="$BUILD_ROOT/stage"
 STAGE_SOURCE="$STAGE_ROOT/src_new"
 DIST_ROOT="$PROJECT_ROOT/dist/macos"
-VERSION=${PHREEFIT_VERSION:-0.0.0}
+VERSION=${PHREEFIT_VERSION:-}
 APP_PATH="$DIST_ROOT/PhreeFit.app"
-DMG_PATH="$DIST_ROOT/PhreeFit-$VERSION-$(uname -m).dmg"
 
 if [[ "$BUILD_ROOT" != "$PROJECT_ROOT/build/macos" || "$DIST_ROOT" != "$PROJECT_ROOT/dist/macos" ]]; then
     print -u2 "Refusing to clean unexpected build paths."
@@ -24,6 +23,17 @@ if [[ -z "$PYTHON_BIN" || ! -x "$PYTHON_BIN" ]]; then
     print -u2 "Python not found. Set PHREEFIT_PYTHON to the build-environment Python."
     exit 1
 fi
+
+SOURCE_VERSION=$("$PYTHON_BIN" -c \
+    'import runpy, sys; print(runpy.run_path(sys.argv[1])["__version__"])' \
+    "$PROJECT_ROOT/src_new/version.py")
+if [[ -z "$VERSION" ]]; then
+    VERSION="$SOURCE_VERSION"
+elif [[ "$VERSION" != "$SOURCE_VERSION" ]]; then
+    print -u2 "PHREEFIT_VERSION ($VERSION) does not match src_new/version.py ($SOURCE_VERSION)."
+    exit 1
+fi
+DMG_PATH="$DIST_ROOT/PhreeFit-$VERSION-$(uname -m).dmg"
 
 "$PYTHON_BIN" -c 'import Cython, PyInstaller, PySide6, numpy, scipy, pyqtgraph, phreeqpy' || {
     print -u2 "Missing build dependencies in: $PYTHON_BIN"

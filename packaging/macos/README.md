@@ -9,9 +9,12 @@ Mac architecture and matching IPhreeqc library.
 Use an arm64 Python environment on Apple Silicon, or an x86_64 environment on
 an Intel Mac. All native dependencies must have the same architecture.
 
+The release version is read from `src_new/version.py`; update that file before
+building a new release. `PHREEFIT_VERSION` is optional and, when supplied, must
+match the version in that file.
+
 ```bash
 export PHREEFIT_PYTHON=/Users/lyt/conda/miniconda3/envs/pf_compile/bin/python
-export PHREEFIT_VERSION=1.0.0
 ./packaging/macos/build_macos.sh
 ```
 
@@ -38,7 +41,6 @@ should be signed with a `Developer ID Application` certificate and notarized.
 
 ```bash
 export PHREEFIT_PYTHON=/Users/lyt/conda/miniconda3/envs/pf_compile/bin/python
-export PHREEFIT_VERSION=1.0.0
 export PHREEFIT_SIGN_IDENTITY='Developer ID Application: Your Name (TEAMID)'
 ./packaging/macos/build_macos.sh
 ```

@@ -12,9 +12,11 @@ from PySide6.QtWidgets import QApplication
 
 if __package__:
     from .main_window import MainWindow
+    from .version import __version__
 else:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from src_new.main_window import MainWindow
+    from src_new.version import __version__
 
 
 def main():
@@ -22,6 +24,7 @@ def main():
     app = QApplication(sys.argv)
     app.setOrganizationName("PhreeFit")
     app.setApplicationName("PhreeFit")
+    app.setApplicationVersion(__version__)
     window = MainWindow()
     window.show()
     return app.exec()

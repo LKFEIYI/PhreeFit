@@ -27,8 +27,11 @@ mix 32-bit, ARM64, and x64 components in the same build environment.
 
 From the project root:
 
+The release version is read from `src_new\version.py`; update that file before
+building a new release. The optional `-Version` argument must match it.
+
 ```powershell
-.\packaging\windows\build_windows.ps1 -Version 1.0.0 -Python python
+.\packaging\windows\build_windows.ps1 -Python python
 ```
 
 Outputs:
@@ -40,7 +43,7 @@ Outputs:
 To build only the application and portable ZIP:
 
 ```powershell
-.\packaging\windows\build_windows.ps1 -Version 1.0.0 -SkipInstaller
+.\packaging\windows\build_windows.ps1 -SkipInstaller
 ```
 
 If Inno Setup is installed in a custom location:
