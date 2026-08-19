@@ -5,11 +5,12 @@ import os
 import time
 
 import pyqtgraph as pg
-from PySide6.QtCore import Qt
+from pyqtgraph.exporters import ImageExporter, SVGExporter
+from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QFileDialog, QInputDialog, QLineEdit, QMainWindow,
-    QMessageBox, QRadioButton, QTextEdit,
+    QHBoxLayout, QLabel, QMessageBox, QPushButton, QRadioButton, QTextEdit, QWidget,
 )
 
 from . import main_cal as mc
@@ -64,6 +65,20 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         pg.setConfigOption("foreground", "k")
         # The raster paint path is more stable than OpenGL in frozen macOS apps.
         pg.setConfigOption("useOpenGL", False)
+        plot_toolbar = QWidget()
+        plot_toolbar_layout = QHBoxLayout(plot_toolbar)
+        plot_toolbar_layout.setContentsMargins(0, 0, 0, 0)
+        self.checkBox_show_species = QCheckBox("Show surface species")
+        self.checkBox_show_species.setChecked(False)
+        self.checkBox_species_log = QCheckBox("Log right axis")
+        self.pushButton_reset_plot = QPushButton("Reset view")
+        self.pushButton_export_plot = QPushButton("Export plot")
+        plot_toolbar_layout.addWidget(self.checkBox_show_species)
+        plot_toolbar_layout.addWidget(self.checkBox_species_log)
+        plot_toolbar_layout.addStretch()
+        plot_toolbar_layout.addWidget(self.pushButton_reset_plot)
+        plot_toolbar_layout.addWidget(self.pushButton_export_plot)
+        self.verticalLayout.addWidget(plot_toolbar)
         self.w_plt = pg.PlotWidget()
         self.verticalLayout.addWidget(self.w_plt)
         self.plot_item = self.w_plt.getPlotItem()
@@ -75,6 +90,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.species_view.setMouseEnabled(x=False, y=True)
         self.plot_item.vb.sigResized.connect(self._sync_species_view)
         self.plot_item.hideAxis("right")
+        self._species_curves = []
+        self._species_legend_items = []
+        self._has_surface_species = False
         self._sync_species_view()
         plot_font = QFont()
         plot_font.setPixelSize(16)
@@ -92,6 +110,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.output_folder = self.config_file.output_directory
         self.data_folder = self.config_file.data_directory
         self.history_folder = self.output_folder
+
+        self.activity_status_label = QLabel("Ready")
+        self.path_status_label = QLabel()
+        self.path_status_label.setStyleSheet("color: #555;")
+        self.statusbar.addWidget(self.activity_status_label, 1)
+        self.statusbar.addPermanentWidget(self.path_status_label)
+        self.optimization_status_timer = QTimer(self)
+        self.optimization_status_timer.setInterval(1000)
+        self.optimization_status_timer.timeout.connect(self._update_optimization_status)
+        self._optimization_started_at = None
+        self._optimization_outcome = None
+        self._sync_advanced_mode_controls()
+        self._update_path_display()
 
     def _connect_signals(self):
         self.pushButton_db.clicked.connect(self.load_database)
@@ -118,8 +149,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.actiondifferential_evolution.triggered.connect(self.differential_evolution)
         self.actionDual_annealing.triggered.connect(self.dual_annealing)
         self.actionnelder_mead.triggered.connect(self.nelder_mead)
+        self.radioButton_mode_titration.toggled.connect(self._advanced_mode_selected)
         self.checkBox.stateChanged.connect(self.label_change_2)
         self.checkBox.stateChanged.connect(self._reload_advanced_data_for_mode)
+        self.checkBox.stateChanged.connect(self._sync_advanced_mode_controls)
         self.radioButton_fx_2.toggled.connect(self.label_change_2)
         self.radioButton_ds_2.toggled.connect(self.label_change_2)
         self.radioButton_ds.toggled.connect(self.label_change_1)
@@ -133,6 +166,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.actionSave_settings.triggered.connect(self.save_settings)
         self.actionLoad_settings.triggered.connect(self.load_settings)
         self.actionCompare_results.triggered.connect(self.compare_history)
+        self.checkBox_show_species.toggled.connect(self._set_species_visibility)
+        self.checkBox_species_log.toggled.connect(self._set_species_log_mode)
+        self.pushButton_reset_plot.clicked.connect(self._reset_plot_view)
+        self.pushButton_export_plot.clicked.connect(self._export_plot)
 
     def _optimization_busy(self):
         """Keep a worker busy until its QThread.finished signal is handled."""
@@ -144,6 +181,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.comboBox_mdl.setEnabled(not running)
         self.comboBox_mdl_2.setEnabled(not running)
         self.checkBox.setEnabled(not running)
+        self.radioButton_mode_adsorption.setEnabled(not running)
+        self.radioButton_mode_titration.setEnabled(not running)
         self.pushButton_stp.setEnabled(running and mode == "titration")
         self.pushButton_stp_2.setEnabled(running and mode == "advanced")
 
@@ -165,11 +204,33 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         worker.finished.connect(self._optimization_worker_finished)
         self._set_optimization_controls(True, mode)
+        self._optimization_started_at = time.monotonic()
+        self._optimization_outcome = None
+        self.optimization_status_timer.start()
+        self._update_optimization_status()
         worker.start()
         return True
 
     def _optimization_worker_finished(self):
         worker = self.sender()
+        elapsed = 0.0
+        if self._optimization_started_at is not None:
+            elapsed = time.monotonic() - self._optimization_started_at
+        worker_message = getattr(worker, "msg", {})
+        if worker_message.get("cancelled", False):
+            outcome = "Cancelled"
+        elif worker_message.get("successful") is True:
+            outcome = "Completed"
+        elif worker_message.get("successful") is False:
+            outcome = "Failed"
+        else:
+            outcome = self._optimization_outcome or "Finished"
+        task_name = getattr(worker, "task_name", "") or "(unnamed)"
+        self.optimization_status_timer.stop()
+        self.activity_status_label.setText(
+            f"{outcome} | Task: {task_name} | Elapsed: {self._format_elapsed(elapsed)}"
+        )
+        self._optimization_started_at = None
         if worker is self.work:
             self.work = None
         if worker is self.work2:
@@ -179,6 +240,78 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self._set_optimization_controls(False)
         worker.deleteLater()
 
+    @staticmethod
+    def _format_elapsed(seconds):
+        total_seconds = max(0, int(seconds))
+        minutes, seconds = divmod(total_seconds, 60)
+        hours, minutes = divmod(minutes, 60)
+        if hours:
+            return f"{hours:d}:{minutes:02d}:{seconds:02d}"
+        return f"{minutes:02d}:{seconds:02d}"
+
+    def _active_worker(self):
+        return self.work if self.work is not None else self.work2
+
+    def _update_optimization_status(self):
+        worker = self._active_worker()
+        if worker is None or self._optimization_started_at is None:
+            return
+        elapsed = time.monotonic() - self._optimization_started_at
+        state = "Stopping" if worker.stop_requested() else "Optimizing"
+        task_name = getattr(worker, "task_name", "") or "(unnamed)"
+        method = getattr(worker, "method", self.method_selected)
+        processes = getattr(worker, "processes", 1)
+        self.activity_status_label.setText(
+            f"{state} | Task: {task_name} | {method} | Processes: {processes} | "
+            f"Elapsed: {self._format_elapsed(elapsed)}"
+        )
+
+    @staticmethod
+    def _short_path(path):
+        if not path:
+            return "—"
+        normalized = os.path.normpath(path)
+        parent, name = os.path.split(normalized)
+        parent_name = os.path.basename(parent)
+        return os.path.join("…", parent_name, name) if parent_name else name
+
+    def _update_path_display(self):
+        data_path = (
+            self.advanced_data_path
+            if self.last_settings_mode == "advanced"
+            else self.titration_data_path
+        )
+        self.path_status_label.setText(
+            "DB: {} | Data: {} | Output: {}".format(
+                self._short_path(self.database_path),
+                self._short_path(data_path),
+                self._short_path(self.output_folder),
+            )
+        )
+        self.path_status_label.setToolTip(
+            "Database: {}\nData: {}\nOutput: {}".format(
+                self.database_path or "Not loaded",
+                data_path or "Not loaded",
+                self.output_folder or "Not configured",
+            )
+        )
+
+    def _advanced_mode_selected(self, titration_selected):
+        self.checkBox.setChecked(bool(titration_selected))
+
+    def _sync_advanced_mode_controls(self, _state=None):
+        titration = self.checkBox.isChecked()
+        for radio_button, checked in (
+            (self.radioButton_mode_titration, titration),
+            (self.radioButton_mode_adsorption, not titration),
+        ):
+            was_blocked = radio_button.blockSignals(True)
+            radio_button.setChecked(checked)
+            radio_button.blockSignals(was_blocked)
+        self.pushButton_rd_2.setText(
+            "Read titration data" if titration else "Read adsorption data"
+        )
+
     def _sync_species_view(self):
         self.species_view.setGeometry(self.plot_item.vb.sceneBoundingRect())
         self.species_view.linkedViewChanged(
@@ -186,9 +319,65 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.species_view.XAxis,
         )
 
+    def _set_species_visibility(self, visible):
+        visible = bool(visible) and self._has_surface_species
+        self.species_view.setVisible(visible)
+        if visible:
+            self.plot_item.showAxis("right")
+        else:
+            self.plot_item.hideAxis("right")
+        self.checkBox_species_log.setEnabled(visible)
+        for curve, species_name in self._species_legend_items:
+            if visible:
+                self.plot_legend.addItem(curve, species_name)
+            else:
+                self.plot_legend.removeItem(species_name)
+
+    def _set_species_log_mode(self, enabled):
+        enabled = bool(enabled)
+        self.species_view.setLogMode("y", enabled)
+        self.plot_item.getAxis("right").setLogMode(enabled)
+        for curve in self._species_curves:
+            curve.setLogMode(False, enabled)
+        self.species_view.enableAutoRange(axis=self.species_view.YAxis, enable=True)
+
+    def _reset_plot_view(self):
+        self.plot_item.vb.autoRange()
+        if self._has_surface_species and self.checkBox_show_species.isChecked():
+            self.species_view.autoRange()
+            self._sync_species_view()
+
+    def _export_plot(self):
+        default_path = os.path.join(self.output_folder, "phreefit_plot.png")
+        path, selected_filter = QFileDialog.getSaveFileName(
+            self,
+            "Export plot",
+            default_path,
+            "PNG image (*.png);;SVG image (*.svg)",
+        )
+        if not path:
+            return
+        try:
+            if selected_filter.startswith("SVG") or path.lower().endswith(".svg"):
+                if not path.lower().endswith(".svg"):
+                    root, extension = os.path.splitext(path)
+                    path = root + ".svg" if extension.lower() in (".png", ".svg") else path + ".svg"
+                exporter = SVGExporter(self.plot_item)
+            else:
+                if not path.lower().endswith(".png"):
+                    root, extension = os.path.splitext(path)
+                    path = root + ".png" if extension.lower() in (".png", ".svg") else path + ".png"
+                exporter = ImageExporter(self.plot_item)
+                exporter.parameters()["width"] = 1600
+            exporter.export(path)
+            self.activity_status_label.setText("Plot exported: " + self._short_path(path))
+        except Exception as error:
+            QMessageBox.warning(self, "Export plot", "Unable to export the plot:\n" + str(error))
+
     def compare_history(self):
         output_folder = self._configured_history_folder()
         log_path = os.path.join(output_folder, "phreefit_log.txt")
+        results_path = os.path.join(output_folder, "phreefit_results.txt")
         try:
             records = read_optimization_history(log_path)
         except (OSError, UnicodeError, ValueError) as error:
@@ -201,7 +390,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 "No completed optimization records were found in the current output path.",
             )
             return
-        dialog = HistoryComparisonDialog(records, log_path, self)
+        dialog = HistoryComparisonDialog(records, log_path, results_path, self)
         dialog.exec()
 
     def _configured_history_folder(self):
@@ -209,6 +398,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.config_file.load_config_file()
         self.output_folder = self.config_file.output_directory
         self.history_folder = self.output_folder
+        self._update_path_display()
         return self.history_folder
 
     def showOpendialog(self):
@@ -252,6 +442,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.tableView.setModel(TableModel(data.table))
         self.titration_data_path = os.path.abspath(path)
         self.data_folder = os.path.dirname(self.titration_data_path)
+        self._update_path_display()
 
     def _load_advanced_data(self, path):
         data = read_advanced_data(path, titration=self.checkBox.isChecked())
@@ -262,6 +453,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.tableView_2.setModel(TableModel(data.table))
         self.advanced_data_path = os.path.abspath(path)
         self.data_folder = os.path.dirname(self.advanced_data_path)
+        self._update_path_display()
 
     def _reload_advanced_data_for_mode(self, _state=None):
         """Reinterpret the current Advanced CSV when Titration mode changes."""
@@ -283,6 +475,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.database = read_database(path)
         self.database_path = os.path.abspath(path)
         self.database_folder = os.path.dirname(self.database_path)
+        self._update_path_display()
 
     def _serialize_widgets(self, page):
         excluded_text_edits = {"textEdit_res", "textEdit_sf", "textEdit_res_2", "textEdit_sf_2"}
@@ -402,6 +595,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.mix_data = None
         self.ph_res = None
         self.tableView.setModel(None)
+        self._update_path_display()
 
     def _clear_advanced_data(self, requested_path=None):
         self.advanced_data_path = requested_path
@@ -410,6 +604,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.mix_data_ad = None
         self.ph_res_ad = None
         self.tableView_2.setModel(None)
+        self._update_path_display()
 
     def load_settings(self):
         history_folder = self._configured_history_folder()
@@ -435,6 +630,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self._restore_widgets(advanced.get("widgets", {}))
             finally:
                 self.checkBox.blockSignals(check_box_was_blocked)
+            self._sync_advanced_mode_controls()
             self.op_obj = [deserialize_surface(item) for item in titration.get("surfaces", [])]
             self.opad = [deserialize_surface(item) for item in advanced.get("surfaces", [])]
 
@@ -488,6 +684,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
             self.config_file.update_config_file([self.data_folder, self.database_folder, self.output_folder])
             self.history_folder = self.output_folder
+            self._update_path_display()
             if load_warnings:
                 QMessageBox.warning(
                     self,
@@ -618,9 +815,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.pushButton_stp.setEnabled(False)
 
         if ssss.get("cancelled", False):
+            self._optimization_outcome = "Cancelled"
             self.textEdit_res.append(ssss["Task"] + '\n' + ssss["error"] + "\n")
             write_log(ssss["Task"] + '\n' + ssss["error"], self.output_folder)
         elif ssss["successful"] == True:
+            self._optimization_outcome = "Completed"
             if ssss["iterations"] < int(self.lineEdit_iter.text()) and self.method_selected == "Differential evolution":
                 QMessageBox.information(None, "warning", "The iterations of DE method is rather few, please rerun or change some settings",
                                         QMessageBox.Yes | QMessageBox.No)
@@ -638,6 +837,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 surface_species_groups=ssss.get("surface_species_groups"),
             )
         else:
+            self._optimization_outcome = "Failed"
             self.textEdit_res.append(ssss["Task"]+'\n'+ssss["error"] + "\n")
             write_log(ssss["Task"]+'\n'+ssss["error"], self.output_folder)
 
@@ -650,6 +850,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def titration_view(self):
         self.last_settings_mode = "titration"
         self.stackedWidget.setCurrentIndex(0)
+        self._update_path_display()
 
     @staticmethod
     def _extract_surface_species(speciation, surface_species):
@@ -740,9 +941,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if expected_points and len(values) >= expected_points
         }
         if not species_series:
+            self._has_surface_species = False
             self.plot_item.hideAxis("right")
+            self.species_view.setVisible(False)
+            self.checkBox_show_species.setEnabled(False)
+            self.checkBox_species_log.setEnabled(False)
             return
 
+        self._has_surface_species = True
+        self.checkBox_show_species.setEnabled(True)
         self.plot_item.showAxis("right")
         label_style = {"font": "Arial", "color": "#000", "font-size": "16pt"}
         self.plot_item.getAxis("right").setLabel("Surface species (mol/kgw)", **label_style)
@@ -767,13 +974,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     symbolBrush=pg.mkBrush("w"),
                 )
                 self.species_view.addItem(curve)
+                self._species_curves.append(curve)
                 if first_curve is None:
                     first_curve = curve
                 offset += count
             if first_curve is not None:
-                self.plot_legend.addItem(first_curve, species_name)
+                self._species_legend_items.append((first_curve, species_name))
 
         self.species_view.enableAutoRange(axis=self.species_view.YAxis, enable=True)
+        self._set_species_log_mode(self.checkBox_species_log.isChecked())
+        self._set_species_visibility(self.checkBox_show_species.isChecked())
         self._sync_species_view()
 
     def plot_res(self, model_res, titration=False, view=False, speciation=None, surface_species=None,
@@ -782,6 +992,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         r_color = ('b', 'g', 'r', 'c', 'm', 'y', 'k', 'd', 'l', 's')
         self.w_plt.clear()
         self.species_view.clear()
+        self._species_curves.clear()
+        self._species_legend_items.clear()
+        self._has_surface_species = False
         self.plot_legend.clear()
         x_label = "volume"
         y_label = "pH"
@@ -829,10 +1042,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if self.work is not None and self.work.isRunning():
             self.work.request_stop()
             self.pushButton_stp.setEnabled(False)
+            self._update_optimization_status()
 
     def advanced_view(self):
         self.last_settings_mode = "advanced"
         self.stackedWidget.setCurrentIndex(2)
+        self._update_path_display()
 
     def add_surface2(self):
         tem_sp = mc.SurfaceSpecies2()
@@ -1041,9 +1256,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.pushButton_stp_2.setEnabled(False)
 
         if ssss.get("cancelled", False):
+            self._optimization_outcome = "Cancelled"
             self.textEdit_res_2.append(ssss["Task"] + '\n' + ssss["error"] + "\n")
             write_log(ssss["Task"] + '\n' + ssss["error"], self.output_folder)
         elif ssss["successful"] == True:
+            self._optimization_outcome = "Completed"
             if ssss["iterations"] < int(self.lineEdit_iter_2.text()) and self.method_selected == "Differential evolution":
                 QMessageBox.information(None, "warning", "The iterations of DE method is rather few, please rerun or change some settings",
                                         QMessageBox.Yes | QMessageBox.No)
@@ -1061,6 +1278,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 surface_species_groups=ssss.get("surface_species_groups"),
             )
         else:
+            self._optimization_outcome = "Failed"
             self.textEdit_res_2.append(ssss["Task"]+'\n'+ssss["error"] + "\n")
             write_log(ssss["Task"]+'\n'+ssss["error"], self.output_folder)
 
@@ -1068,6 +1286,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if self.work2 is not None and self.work2.isRunning():
             self.work2.request_stop()
             self.pushButton_stp_2.setEnabled(False)
+            self._update_optimization_status()
 
     def dual_annealing(self):
         self.actiondifferential_evolution.setChecked(False)
@@ -1135,6 +1354,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.database_folder,
             self.output_folder,
         ])
+        self._update_path_display()
 
     def enable_surf_eq(self):
         if self.stackedWidget.currentIndex() == 2 and self.checkBox.isChecked() == False:
