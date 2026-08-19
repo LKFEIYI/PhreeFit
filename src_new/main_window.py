@@ -2,11 +2,10 @@
 
 import multiprocessing
 import os
-import time
 
 import pyqtgraph as pg
 from pyqtgraph.exporters import ImageExporter, SVGExporter
-from PySide6.QtCore import QTimer, Qt, QUrl
+from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QTextCharFormat
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QFileDialog, QInputDialog, QLineEdit, QMainWindow,
@@ -14,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import main_cal as mc
+from .controllers import FitParameter, OptimizationController
 from .io_service import (
     ConfigFile,
     SETTINGS_FORMAT,
@@ -31,7 +31,7 @@ from .io_service import (
 )
 from .post_plot import HistoryComparisonDialog, read_optimization_history
 from .table_model import TableModel
-from .ui.main_window_ui import ResponsiveLayoutManager, Ui_MainWindow
+from .ui.main_window_ui import MainWindowLayoutManager, Ui_MainWindow
 from .workers import WorkThreadAdvanced
 
 
@@ -39,7 +39,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
         self.setupUi(self)
-        self.responsive_layout = ResponsiveLayoutManager(self)
+        self.layout_manager = MainWindowLayoutManager(self)
         self._initialize_runtime_state()
         self._connect_signals()
 
@@ -116,12 +116,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.path_status_label.setStyleSheet("color: #555;")
         self.statusbar.addWidget(self.activity_status_label, 1)
         self.statusbar.addPermanentWidget(self.path_status_label)
-        self.optimization_status_timer = QTimer(self)
-        self.optimization_status_timer.setInterval(1000)
-        self.optimization_status_timer.timeout.connect(self._update_optimization_status)
-        self._optimization_started_at = None
-        self._optimization_outcome = None
+        self.optimization_controller = OptimizationController(self)
         self._sync_advanced_mode_controls()
+        self._sync_titration_model_controls()
+        self._sync_advanced_surface_controls()
         self._update_path_display()
 
     def _connect_signals(self):
@@ -171,101 +169,31 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.checkBox_species_log.toggled.connect(self._set_species_log_mode)
         self.pushButton_reset_plot.clicked.connect(self._reset_plot_view)
         self.pushButton_export_plot.clicked.connect(self._export_plot)
+        self.comboBox_mdl.currentTextChanged.connect(self._sync_titration_model_controls)
+        self.comboBox_mdl_2.currentTextChanged.connect(self._sync_advanced_surface_controls)
+        for checkbox in (
+            self.checkBox_site,
+            self.checkBox_c1,
+            self.checkBox_c2,
+            self.checkBox_logk,
+            self.checkBox_z1,
+        ):
+            checkbox.toggled.connect(self._sync_advanced_surface_controls)
 
     def _optimization_busy(self):
-        """Keep a worker busy until its QThread.finished signal is handled."""
-        return self.work is not None or self.work2 is not None
+        return self.optimization_controller.busy()
 
     def _set_optimization_controls(self, running=False, mode=None):
-        self.pushButton_opt.setEnabled(not running)
-        self.pushButton_opt_2.setEnabled(not running)
-        self.comboBox_mdl.setEnabled(not running)
-        self.comboBox_mdl_2.setEnabled(not running)
-        self.checkBox.setEnabled(not running)
-        self.radioButton_mode_adsorption.setEnabled(not running)
-        self.radioButton_mode_titration.setEnabled(not running)
-        self.pushButton_stp.setEnabled(running and mode == "titration")
-        self.pushButton_stp_2.setEnabled(running and mode == "advanced")
+        self.optimization_controller.set_controls(running, mode)
 
     def _start_optimization_worker(self, worker, mode):
-        if self._optimization_busy():
-            QMessageBox.information(
-                self,
-                "Optimization running",
-                "Please stop or wait for the current optimization before starting another one.",
-            )
-            return False
-
-        if mode == "titration":
-            self.work = worker
-            worker.signals.connect(self.display_results)
-        else:
-            self.work2 = worker
-            worker.signals.connect(self.display_results2)
-
-        worker.finished.connect(self._optimization_worker_finished)
-        self._set_optimization_controls(True, mode)
-        self._optimization_started_at = time.monotonic()
-        self._optimization_outcome = None
-        self.optimization_status_timer.start()
-        self._update_optimization_status()
-        worker.start()
-        return True
-
-    def _optimization_worker_finished(self):
-        worker = self.sender()
-        elapsed = 0.0
-        if self._optimization_started_at is not None:
-            elapsed = time.monotonic() - self._optimization_started_at
-        worker_message = getattr(worker, "msg", {})
-        if worker_message.get("cancelled", False):
-            outcome = "Cancelled"
-        elif worker_message.get("successful") is True:
-            outcome = "Completed"
-        elif worker_message.get("successful") is False:
-            outcome = "Failed"
-        else:
-            outcome = self._optimization_outcome or "Finished"
-        task_name = getattr(worker, "task_name", "") or "(unnamed)"
-        self.optimization_status_timer.stop()
-        self.activity_status_label.setText(
-            f"{outcome} | Task: {task_name} | Elapsed: {self._format_elapsed(elapsed)}"
-        )
-        self._optimization_started_at = None
-        if worker is self.work:
-            self.work = None
-        if worker is self.work2:
-            self.work2 = None
-
-        if not self._optimization_busy():
-            self._set_optimization_controls(False)
-        worker.deleteLater()
-
-    @staticmethod
-    def _format_elapsed(seconds):
-        total_seconds = max(0, int(seconds))
-        minutes, seconds = divmod(total_seconds, 60)
-        hours, minutes = divmod(minutes, 60)
-        if hours:
-            return f"{hours:d}:{minutes:02d}:{seconds:02d}"
-        return f"{minutes:02d}:{seconds:02d}"
+        return self.optimization_controller.start(worker, mode)
 
     def _active_worker(self):
-        return self.work if self.work is not None else self.work2
+        return self.optimization_controller.active_worker()
 
     def _update_optimization_status(self):
-        worker = self._active_worker()
-        if worker is None or self._optimization_started_at is None:
-            return
-        elapsed = time.monotonic() - self._optimization_started_at
-        state = "Stopping" if worker.stop_requested() else "Optimizing"
-        task_name = getattr(worker, "task_name", "") or "(unnamed)"
-        method = getattr(worker, "method", self.method_selected)
-        processes = getattr(worker, "processes", 1)
-        self.activity_status_label.setText(
-            f"{state} | Task: {task_name} | {method} | Processes: {processes} | "
-            f"Elapsed: {self._format_elapsed(elapsed)}"
-        )
+        self.optimization_controller.update_status()
 
     @staticmethod
     def _short_path(path):
@@ -312,6 +240,53 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.pushButton_rd_2.setText(
             "Read titration data" if titration else "Read adsorption data"
         )
+
+    def _sync_titration_model_controls(self, _model=None):
+        c1_enabled = self.comboBox_mdl.currentText() == "CCM"
+        for widget in (
+            self.label_37,
+            self.lineEdit_icap,
+            self.lineEdit_caplb,
+            self.lineEdit_capub,
+        ):
+            widget.setVisible(True)
+            widget.setEnabled(c1_enabled)
+
+    def _sync_advanced_surface_controls(self, _state=None):
+        model = self.comboBox_mdl_2.currentText()
+        c1_enabled = model in ("CCM", "CDMUSIC")
+        c2_enabled = model == "CDMUSIC"
+        z1_enabled = model == "CDMUSIC"
+
+        parameter_rows = (
+            (True, self.checkBox_site, self.lineEdit_isite_2,
+             self.lineEdit_sitelb_2, self.lineEdit_siteub_2),
+            (c1_enabled, self.checkBox_c1, self.lineEdit_ic1,
+             self.lineEdit_ic1lb, self.lineEdit_ic1ub),
+            (c2_enabled, self.checkBox_c2, self.lineEdit_ic2,
+             self.lineEdit_ic2lb, self.lineEdit_ic2ub),
+            (True, self.checkBox_logk, self.lineEdit_ik,
+             self.lineEdit_iklb, self.lineEdit_ikub),
+            (z1_enabled, self.checkBox_z1, self.lineEdit_iz1,
+             self.lineEdit_iz1lb, self.lineEdit_iz1ub),
+        )
+        for applicable, checkbox, initial_edit, lower_edit, upper_edit in parameter_rows:
+            for widget in (checkbox, initial_edit, lower_edit, upper_edit):
+                widget.setVisible(True)
+            checkbox.setEnabled(applicable)
+            initial_edit.setEnabled(applicable)
+            bounds_enabled = applicable and not checkbox.isChecked()
+            lower_edit.setEnabled(bounds_enabled)
+            upper_edit.setEnabled(bounds_enabled)
+
+        for widget in (
+            self.label_charge_location,
+            self.comboBox_charge,
+            self.label_total_charge,
+            self.lineEdit_totalz,
+        ):
+            widget.setVisible(True)
+            widget.setEnabled(z1_enabled)
 
     def _sync_species_view(self):
         self.species_view.setGeometry(self.plot_item.vb.sceneBoundingRect())
@@ -714,32 +689,50 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             write_log(str(error_msg), self.output_folder)
             QMessageBox.warning(self, "Error", "Unable to load settings:\n" + str(error_msg))
 
+    def _read_fit_parameter(self, initial_edit, lower_edit, upper_edit, name, fixed=False):
+        parameter = FitParameter.from_text(
+            initial_edit.text(),
+            lower_edit.text(),
+            upper_edit.text(),
+            fixed=fixed,
+        )
+        invalid = not parameter.in_bounds
+        initial_edit.setStyleSheet("border: 1px solid #c62828;" if invalid else "")
+        if invalid:
+            if parameter.bounds_ordered:
+                message = f"The initial value of {name} is outside its bounds."
+            else:
+                message = f"The lower bound of {name} must not exceed its upper bound."
+            QMessageBox.warning(self, "Invalid parameter", message)
+        return parameter
+
     def add_surface(self):
         tem_sp = mc.SurfaceSpecies2()
         temp_name = self.lineEdit_sname.text().strip().capitalize()
+        sites = self._read_fit_parameter(
+            self.lineEdit_isite, self.lineEdit_sitelb, self.lineEdit_siteub, "Sites"
+        )
+        c1 = self._read_fit_parameter(
+            self.lineEdit_icap, self.lineEdit_caplb, self.lineEdit_capub, "C1"
+        )
         tem_sp.add_surface(surfacename=temp_name, surface_ms=temp_name + "OH", mass=self.lineEdit_smass.text(),
-                           sites=(float(self.lineEdit_sitelb.text()), float(self.lineEdit_siteub.text())),
-                           area=self.lineEdit_sarea.text(), sites_initial=float(self.lineEdit_isite.text()),
-                           c1_initial=float(self.lineEdit_icap.text()),
-                           c1=(float(self.lineEdit_caplb.text()), float(self.lineEdit_capub.text())), c2=0)
+                           sites=sites.calculation_value,
+                           area=self.lineEdit_sarea.text(), sites_initial=sites.initial,
+                           c1_initial=c1.initial, c1=c1.calculation_value, c2=0)
         if self.checkBox_pro.isChecked() == True:
-            if float(self.lineEdit_ikp.text())<float(self.lineEdit_plb.text()) or float(self.lineEdit_ikp.text())>float(self.lineEdit_pub.text()):
-                QMessageBox.information(None, "warning", "The initial guess of log_k should be within the bounds",
-                                    QMessageBox.Yes | QMessageBox.No)
-
+            logk = self._read_fit_parameter(
+                self.lineEdit_ikp, self.lineEdit_plb, self.lineEdit_pub, "basic-site log_k"
+            )
             tem_sp.add_reactions(reactions=tem_sp.surface_name + "OH" + " + H+ = " + tem_sp.surface_name + "OH2+",
-                                     k_initial=float(self.lineEdit_ikp.text()),
-                                     k=(float(self.lineEdit_plb.text()), float(self.lineEdit_pub.text())), z0d=True,
+                                     k_initial=logk.initial, k=logk.calculation_value, z0d=True,
                                      ztotal=1, z1=1)
 
         if self.checkBox_dpro.isChecked() == True:
-            if float(self.lineEdit_ikdp.text())<float(self.lineEdit_dplb.text()) or float(self.lineEdit_ikdp.text())>float(self.lineEdit_dpub.text()):
-                QMessageBox.information(None, "warning", "The initial guess of log_k should be within the bounds",
-                                        QMessageBox.Yes | QMessageBox.No)
-
+            logk = self._read_fit_parameter(
+                self.lineEdit_ikdp, self.lineEdit_dplb, self.lineEdit_dpub, "acidic-site log_k"
+            )
             tem_sp.add_reactions(reactions=tem_sp.surface_name + "OH" + " = " + tem_sp.surface_name + "O-" + " + H+",
-                                     k_initial=float(self.lineEdit_ikdp.text()),
-                                     k=(float(self.lineEdit_dplb.text()), float(self.lineEdit_dpub.text())), z0d=True,
+                                     k_initial=logk.initial, k=logk.calculation_value, z0d=True,
                                      ztotal=1, z1=1)
         return tem_sp
 
@@ -754,6 +747,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             else:
                 self.op_obj.pop(sp_name.index(self.lineEdit_sname.text().strip().capitalize()))
                 self.op_obj.append(self.add_surface())
+            self.show_surface()
 
     @staticmethod
     def _format_init_guess(initial, bounds, parameter, indent=""):
@@ -871,11 +865,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.pushButton_stp.setEnabled(False)
 
         if ssss.get("cancelled", False):
-            self._optimization_outcome = "Cancelled"
+            self.optimization_controller.set_outcome("Cancelled")
             self.textEdit_res.append(ssss["Task"] + '\n' + ssss["error"] + "\n")
             write_log(ssss["Task"] + '\n' + ssss["error"], self.output_folder)
         elif ssss["successful"] == True:
-            self._optimization_outcome = "Completed"
+            self.optimization_controller.set_outcome("Completed")
             if ssss["iterations"] < int(self.lineEdit_iter.text()) and self.method_selected == "Differential evolution":
                 QMessageBox.information(None, "warning", "The iterations of DE method is rather few, please rerun or change some settings",
                                         QMessageBox.Yes | QMessageBox.No)
@@ -893,12 +887,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 surface_species_groups=ssss.get("surface_species_groups"),
             )
         else:
-            self._optimization_outcome = "Failed"
+            self.optimization_controller.set_outcome("Failed")
             self.textEdit_res.append(ssss["Task"]+'\n'+ssss["error"] + "\n")
             write_log(ssss["Task"]+'\n'+ssss["error"], self.output_folder)
 
     def clear_sp(self):
         self.op_obj.clear()
+        self.show_surface()
 
     def plot_view(self):
         self.stackedWidget.setCurrentIndex(1)
@@ -1095,10 +1090,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
 
     def stop_thread(self):
-        if self.work is not None and self.work.isRunning():
-            self.work.request_stop()
-            self.pushButton_stp.setEnabled(False)
-            self._update_optimization_status()
+        self.optimization_controller.request_stop("titration")
 
     def advanced_view(self):
         self.last_settings_mode = "advanced"
@@ -1108,35 +1100,35 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def add_surface2(self):
         tem_sp = mc.SurfaceSpecies2()
         current_sname = self.lineEdit_sname_2.text().strip().capitalize()
-
-        if self.checkBox_site.isChecked() == True:
-            site = float(self.lineEdit_isite_2.text())
-        else:
-            if float(self.lineEdit_isite_2.text())<float(self.lineEdit_sitelb_2.text()) or float(self.lineEdit_isite_2.text())>float(self.lineEdit_siteub_2.text()):
-                QMessageBox.information(None, "warning", "The initial guess of sites should be within the bounds",
-                                    QMessageBox.Yes | QMessageBox.No)
-            site = (float(self.lineEdit_sitelb_2.text()), float(self.lineEdit_siteub_2.text()))
-        if self.checkBox_c1.isChecked() == True:
-            c1 = float(self.lineEdit_ic1.text())
-        else:
-            if float(self.lineEdit_ic1.text())<float(self.lineEdit_ic1lb.text()) or float(self.lineEdit_ic1.text())>float(self.lineEdit_ic1ub.text()):
-                QMessageBox.information(None, "warning", "The initial guess of C1 should be within the bounds",
-                                    QMessageBox.Yes | QMessageBox.No)
-            c1 = (float(self.lineEdit_ic1lb.text()), float(self.lineEdit_ic1ub.text()))
-        if self.checkBox_c2.isChecked() == True:
-            c2 = float(self.lineEdit_ic2.text())
-        else:
-            if float(self.lineEdit_ic2.text())<float(self.lineEdit_ic2lb.text()) or float(self.lineEdit_ic2.text())>float(self.lineEdit_ic2ub.text()):
-                QMessageBox.information(None, "warning", "The initial guess of C2 should be within the bounds",
-                                    QMessageBox.Yes | QMessageBox.No)
-            c2 = (float(self.lineEdit_ic2lb.text()), float(self.lineEdit_ic2ub.text()))
+        site = self._read_fit_parameter(
+            self.lineEdit_isite_2,
+            self.lineEdit_sitelb_2,
+            self.lineEdit_siteub_2,
+            "Sites",
+            fixed=self.checkBox_site.isChecked(),
+        )
+        c1 = self._read_fit_parameter(
+            self.lineEdit_ic1,
+            self.lineEdit_ic1lb,
+            self.lineEdit_ic1ub,
+            "C1",
+            fixed=self.checkBox_c1.isChecked(),
+        )
+        c2 = self._read_fit_parameter(
+            self.lineEdit_ic2,
+            self.lineEdit_ic2lb,
+            self.lineEdit_ic2ub,
+            "C2",
+            fixed=self.checkBox_c2.isChecked(),
+        )
         surface_formula = self.lineEdit_sformula.text()
         surface_formula = surface_formula[0].upper() + surface_formula[1:]
         tem_sp.add_surface(surfacename=current_sname, surface_ms=surface_formula,
                            mass=self.lineEdit_smass_2.text(),
-                           sites=site, area=self.lineEdit_sarea_2.text(), c1=c1, c2=c2,
-                           sites_initial=float(self.lineEdit_isite_2.text()),
-                           c1_initial=float(self.lineEdit_ic1.text()), c2_initial=float(self.lineEdit_ic2.text()))
+                           sites=site.calculation_value, area=self.lineEdit_sarea_2.text(),
+                           c1=c1.calculation_value, c2=c2.calculation_value,
+                           sites_initial=site.initial,
+                           c1_initial=c1.initial, c2_initial=c2.initial)
         return tem_sp
 
     def update_surface(self):
@@ -1152,12 +1144,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             else:
                 self.opad.pop(sp_name.index(current_sname))
                 self.opad.append(self.add_surface2())
+            self.show_surface2()
 
     def del_surf(self):
         current_sname = self.lineEdit_sname_2.text().strip().capitalize()
         for i in range(0, len(self.opad)):
             if self.opad[i].surface_name == current_sname:
                 self.opad.pop(i)
+                break
+        self.show_surface2()
 
     def add_reaction(self):
         reaction = self.lineEdit_reaction.text().strip()
@@ -1166,28 +1161,32 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             sp_name.append(obj.surface_name)
         for name in sp_name:
             if reaction.find(name) != -1:
-                if self.checkBox_logk.isChecked() == True:
-                    logk = float(self.lineEdit_ik.text())
-                else:
-                    if float(self.lineEdit_ik.text()) < float(self.lineEdit_iklb.text()) or float(self.lineEdit_ik.text()) > float(self.lineEdit_ikub.text()):
-                        QMessageBox.information(None, "warning", "The initial guess of k should be within the bounds",
-                                                QMessageBox.Yes | QMessageBox.No)
-                    logk = (float(self.lineEdit_iklb.text()), float(self.lineEdit_ikub.text()))
-                if self.checkBox_z1.isChecked() == True:
-                    z1 = float(self.lineEdit_iz1.text())
-                else:
-                    if float(self.lineEdit_iz1.text()) < float(self.lineEdit_iz1lb.text()) or float(self.lineEdit_iz1.text()) > float(self.lineEdit_iz1ub.text()):
-                        QMessageBox.information(None, "warning", "The initial guess of z1 should be within the bounds",
-                                                QMessageBox.Yes | QMessageBox.No)
-                    z1 = (float(self.lineEdit_iz1lb.text()), float(self.lineEdit_iz1ub.text()))
+                logk = self._read_fit_parameter(
+                    self.lineEdit_ik,
+                    self.lineEdit_iklb,
+                    self.lineEdit_ikub,
+                    "log_k",
+                    fixed=self.checkBox_logk.isChecked(),
+                )
+                z1 = self._read_fit_parameter(
+                    self.lineEdit_iz1,
+                    self.lineEdit_iz1lb,
+                    self.lineEdit_iz1ub,
+                    "z1",
+                    fixed=self.checkBox_z1.isChecked(),
+                )
                 if self.comboBox_charge.currentIndex() == 0:
                     z0d = True
                 else:
                     z0d = False
-                self.opad[sp_name.index(name)].add_reactions(reactions=reaction, k=logk, z0d=z0d, z1=z1,
+                self.opad[sp_name.index(name)].add_reactions(
+                                                             reactions=reaction,
+                                                             k=logk.calculation_value,
+                                                             z0d=z0d,
+                                                             z1=z1.calculation_value,
                                                              ztotal=float(self.lineEdit_totalz.text()),
-                                                             k_initial=float(self.lineEdit_ik.text()),
-                                                             z1_initial=float(self.lineEdit_iz1.text()))
+                                                             k_initial=logk.initial,
+                                                             z1_initial=z1.initial)
                 break
         self.show_surface2()
 
@@ -1340,11 +1339,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.pushButton_stp_2.setEnabled(False)
 
         if ssss.get("cancelled", False):
-            self._optimization_outcome = "Cancelled"
+            self.optimization_controller.set_outcome("Cancelled")
             self.textEdit_res_2.append(ssss["Task"] + '\n' + ssss["error"] + "\n")
             write_log(ssss["Task"] + '\n' + ssss["error"], self.output_folder)
         elif ssss["successful"] == True:
-            self._optimization_outcome = "Completed"
+            self.optimization_controller.set_outcome("Completed")
             if ssss["iterations"] < int(self.lineEdit_iter_2.text()) and self.method_selected == "Differential evolution":
                 QMessageBox.information(None, "warning", "The iterations of DE method is rather few, please rerun or change some settings",
                                         QMessageBox.Yes | QMessageBox.No)
@@ -1362,15 +1361,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 surface_species_groups=ssss.get("surface_species_groups"),
             )
         else:
-            self._optimization_outcome = "Failed"
+            self.optimization_controller.set_outcome("Failed")
             self.textEdit_res_2.append(ssss["Task"]+'\n'+ssss["error"] + "\n")
             write_log(ssss["Task"]+'\n'+ssss["error"], self.output_folder)
 
     def stop_thread2(self):
-        if self.work2 is not None and self.work2.isRunning():
-            self.work2.request_stop()
-            self.pushButton_stp_2.setEnabled(False)
-            self._update_optimization_status()
+        self.optimization_controller.request_stop("advanced")
 
     def dual_annealing(self):
         self.actiondifferential_evolution.setChecked(False)
@@ -1481,21 +1477,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             QMessageBox.No,
         )
         if result == QMessageBox.Yes:
-            workers = [worker for worker in (self.work, self.work2) if worker is not None]
-            for worker in workers:
-                if worker.isRunning():
-                    worker.request_stop()
-            self.pushButton_stp.setEnabled(False)
-            self.pushButton_stp_2.setEnabled(False)
-
-            deadline = time.monotonic() + 5.0
-            still_running = []
-            for worker in workers:
-                remaining_ms = max(0, int((deadline - time.monotonic()) * 1000))
-                if worker.isRunning() and not worker.wait(remaining_ms):
-                    still_running.append(worker)
-
-            if still_running:
+            if not self.optimization_controller.stop_all_and_wait(5000):
                 QMessageBox.information(
                     self,
                     "Optimization stopping",
