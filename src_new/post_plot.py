@@ -393,7 +393,16 @@ class HistoryComparisonDialog(QDialog):
             ("Select", "Time", "Task", "R2", "adj. R2", "BIC", "RMSE", "V(Y)")
         )
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        # Keep checkboxes as the multi-record selection used by Show/Compare/Delete,
+        # while giving a clicked record the normal, visible row focus highlight.
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setStyleSheet(
+            "QTableWidget::item:selected {"
+            "background-color: #2f80ed;"
+            "color: white;"
+            "}"
+        )
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
         header = self.table.horizontalHeader()

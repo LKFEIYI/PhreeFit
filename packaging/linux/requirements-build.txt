@@ -1,0 +1,8 @@
+cython>=3.0
+numpy>=2.0
+phreeqpy>=0.6
+pyinstaller>=6.0
+pyqtgraph>=0.13
+pyside6>=6.6
+scipy>=1.13
+setuptools>=70
