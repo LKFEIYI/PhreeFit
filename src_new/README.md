@@ -28,6 +28,13 @@ or:
 python src_new/PhreeFit.py
 ```
 
+On macOS, source launches automatically prefer
+`packaging/lib/libiphreeqc-3.8.6.dylib`. A custom absolute path can be selected
+with `PHREEFIT_IPHREEQC_LIBRARY`. Packaged macOS and Windows applications use a
+runtime hook to select their bundled optimized 3.8.6 library and do not depend
+on phreeqpy's 3.7.3 default filename. See `packaging/lib/README.md` for the
+enabled library optimizations and safety validation.
+
 For packaging, use `src_new/PhreeFit.py` as the entry script. If `main_cal.py`
 is compiled with Cython, place the resulting extension module inside
 `src_new` so the package-relative import resolves it.

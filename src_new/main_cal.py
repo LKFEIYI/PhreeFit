@@ -1,7 +1,115 @@
 # cython: language_level=3
+import os
+from pathlib import Path
+import sys
+import threading
+
 import numpy as np
 import phreeqpy.iphreeqc.phreeqc_dll as phc_mod
 from scipy.optimize import dual_annealing, differential_evolution, minimize
+
+
+OPTIMIZATION_CONVERGENCE_TOLERANCE = 1e-7
+FINAL_CONVERGENCE_TOLERANCE = 1e-8
+
+_DISABLE_SELECTED_OUTPUT = '''
+PRINT
+    -selected_output false
+END
+'''
+
+_ENABLE_SELECTED_OUTPUT = '''
+PRINT
+    -selected_output true
+END
+'''
+
+_iphreeqc_local = threading.local()
+
+
+def _configured_iphreeqc_library():
+    """Return the explicit or project-bundled IPhreeqc library when available."""
+    configured = os.environ.get("PHREEFIT_IPHREEQC_LIBRARY")
+    if configured:
+        return configured
+
+    if sys.platform == "darwin":
+        library_name = "libiphreeqc-3.8.6.dylib"
+    elif sys.platform == "win32":
+        library_name = "IPhreeqc-3.8.6.dll"
+    else:
+        return None
+
+    candidates = []
+    frozen_root = getattr(sys, "_MEIPASS", None)
+    if frozen_root:
+        candidates.append(Path(frozen_root) / "iphreeqc" / library_name)
+    candidates.append(
+        Path(__file__).resolve().parents[1] / "packaging" / "lib" / library_name
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    return None
+
+
+def _new_iphreeqc():
+    """Create an instance using the configured or packaged 3.8.6 library."""
+    library = _configured_iphreeqc_library()
+    return phc_mod.IPhreeqc(library) if library else phc_mod.IPhreeqc()
+
+
+def _get_cached_iphreeqc(database):
+    """Return one database-loaded IPhreeqc instance per process and thread."""
+    pid = os.getpid()
+    cached = getattr(_iphreeqc_local, "instance", None)
+    cached_pid = getattr(_iphreeqc_local, "pid", None)
+    cached_database = getattr(_iphreeqc_local, "database", None)
+
+    if cached is not None and cached_pid == pid and cached_database == database:
+        return cached
+
+    # Never destroy a pointer inherited through fork in the child process.
+    if cached is not None and cached_pid == pid:
+        cached.destroy_iphreeqc()
+
+    instance = _new_iphreeqc()
+    try:
+        instance.load_database_string(database)
+    except Exception:
+        instance.destroy_iphreeqc()
+        raise
+    _iphreeqc_local.instance = instance
+    _iphreeqc_local.pid = pid
+    _iphreeqc_local.database = database
+    return instance
+
+
+def close_cached_iphreeqc():
+    """Release the IPhreeqc instance owned by the current process/thread."""
+    instance = getattr(_iphreeqc_local, "instance", None)
+    if instance is not None and getattr(_iphreeqc_local, "pid", None) == os.getpid():
+        instance.destroy_iphreeqc()
+    for attribute in ("instance", "pid", "database"):
+        if hasattr(_iphreeqc_local, attribute):
+            delattr(_iphreeqc_local, attribute)
+
+
+def _run_cached(database, script, convergence_tolerance):
+    """Run a script while preventing selected-output rows from leaking between runs."""
+    instance = _get_cached_iphreeqc(database)
+    run_script = '''
+KNOBS
+    -convergence_tolerance {0:.0e}
+END
+'''.format(convergence_tolerance) + _DISABLE_SELECTED_OUTPUT + script
+    try:
+        instance.run_string(run_script)
+        return instance.get_selected_output_array()
+    except Exception:
+        # A failed PHREEQC run can leave partial definitions in the instance.
+        close_cached_iphreeqc()
+        raise
 
 
 class OptimizationCancelled(Exception):
@@ -404,9 +512,9 @@ class Adsorption:
     def create_script(self, mix=False):
 
         if mix:
-            self.total = self.initial_condition + self.surf_eq_solution + self.titration_solution + self.sms + self.output + self.first_mix
+            self.total = self.initial_condition + self.surf_eq_solution + self.titration_solution + self.sms + self.output + _ENABLE_SELECTED_OUTPUT + self.first_mix
         else:
-            self.total = self.initial_condition + self.sms + self.output + self.eq
+            self.total = self.initial_condition + self.sms + self.output + _ENABLE_SELECTED_OUTPUT + self.eq
 
     def create_eval_script(self, mix=False, species_output=False):
         if species_output:
@@ -415,9 +523,9 @@ class Adsorption:
         else:
             additional_output=""
         if mix:
-            self.total = self.initial_condition + self.surf_eq_solution + self.titration_solution + self.sms + self.output + additional_output + self.first_mix
+            self.total = self.initial_condition + self.surf_eq_solution + self.titration_solution + self.sms + self.output + additional_output + _ENABLE_SELECTED_OUTPUT + self.first_mix
         else:
-            self.total = self.initial_condition + self.sms + self.output + additional_output + self.eq
+            self.total = self.initial_condition + self.sms + self.output + additional_output + _ENABLE_SELECTED_OUTPUT + self.eq
 
 
     def initial_ph(self, eq_phase):
@@ -442,14 +550,10 @@ class Adsorption:
                  END
                  '''.format(j + 1)
 
-        self.ph_test = self.initial_condition + self.sms + self.output + temp_eq
-        prc = phc_mod.IPhreeqc()
-        try:
-            prc.load_database_string(self.database)
-            prc.run_string(self.ph_test)
-            return get_pH(prc.get_selected_output_array())
-        finally:
-            prc.destroy_iphreeqc()
+        self.ph_test = self.initial_condition + self.sms + self.output + _ENABLE_SELECTED_OUTPUT + temp_eq
+        return get_pH(_run_cached(
+            self.database, self.ph_test, OPTIMIZATION_CONVERGENCE_TOLERANCE
+        ))
 
 
 def get_pH(ppp):
@@ -469,14 +573,9 @@ def get_metal(ppp):
 
 
 def run_phreeqc(titration: Adsorption):
-    prc = phc_mod.IPhreeqc()
-    try:
-        prc.load_database_string(titration.database)
-        # print(titration.total)
-        prc.run_string(titration.total)
-        return get_pH(prc.get_selected_output_array())
-    finally:
-        prc.destroy_iphreeqc()
+    return get_pH(_run_cached(
+        titration.database, titration.total, OPTIMIZATION_CONVERGENCE_TOLERANCE
+    ))
 
 
 def advanced_fun(p, exp_data, titration: Adsorption, mix=False):
@@ -533,24 +632,17 @@ def advanced_evaluation(exp_data, results, titration: Adsorption, mix=False, aut
 
 
 def run_phreeqc_ad(titration: Adsorption):
-    prc = phc_mod.IPhreeqc()
-    try:
-        prc.load_database_string(titration.database)
-        # print(titration.total)
-        prc.run_string(titration.total)
-        return get_metal(prc.get_selected_output_array())
-    finally:
-        prc.destroy_iphreeqc()
+    return get_metal(_run_cached(
+        titration.database, titration.total, OPTIMIZATION_CONVERGENCE_TOLERANCE
+    ))
 
 def run_phreeqc_eval(titration: Adsorption):
-    prc = phc_mod.IPhreeqc()
-    try:
-        prc.load_database_string(titration.database)
-        # print(titration.total)
-        prc.run_string(titration.total)
-        return prc.get_selected_output_array()
-    finally:
-        prc.destroy_iphreeqc()
+    # Final reporting should be independent of the last optimizer state. This
+    # one-time reload is negligible compared with the many cached evaluations.
+    close_cached_iphreeqc()
+    return _run_cached(
+        titration.database, titration.total, FINAL_CONVERGENCE_TOLERANCE
+    )
 
 def reduced_x2(exp_data, model_data, error, f):
     ssd = 0
@@ -593,11 +685,12 @@ def optimize_problem(mix_or_eq, method, x0, bounds, maxiter=1000, core=1, t=5230
             'init': "halton",
             'recombination': 0.8
         }
-        if extra_para[-2].p_type=="CCM" or extra_para[-2].p_type=="CDMUSIC":
+        if extra_para[-2].p_type == "CCM" or extra_para[-2].p_type == "CDMUSIC":
             param_de = {
                 'strategy': "best1exp",
                 'init': "halton",
-                'recombination': 0.9
+                'recombination': 0.9,
+                'popsize': 8,
             }
         if core > 1:
             de_results = differential_evolution(residual_func, bounds=bounds, x0=x0, maxiter=maxiter, updating="deferred",

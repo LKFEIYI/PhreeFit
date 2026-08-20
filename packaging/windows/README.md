@@ -1,5 +1,13 @@
 # PhreeFit Windows packaging
 
+## Standalone optimized IPhreeqc DLL source package
+
+`iphreeqc-3.8.6-17100-optimized-win-x64-source.zip` contains the complete
+optimized source and an offline one-click DLL build script. After extraction,
+double-click `build_iphreeqc_dll.cmd`; the validated Release x64 DLL is written
+to `output\win-x64`. The script source and detailed requirements are maintained
+in `iphreeqc_dll_builder`.
+
 The Windows build uses `src_new` as its only application source. It builds the
 calculation module as a Cython `.pyd`, bundles the Windows IPhreeqc DLL, creates
 a portable ZIP, and optionally creates a standard installer with Inno Setup 6.
@@ -9,6 +17,7 @@ a portable ZIP, and optionally creates a standard installer with Inno Setup 6.
 - 64-bit Windows 10 or 11
 - 64-bit CPython (Python 3.10 is recommended to match the existing builds)
 - Microsoft C++ Build Tools with the C++ compiler and Windows SDK
+- CMake 3.20 or newer when an optimized prebuilt DLL is not supplied
 - Inno Setup 6 if a `Setup.exe` installer is required
 
 Install the Python build dependencies in a clean virtual environment:
@@ -32,6 +41,30 @@ building a new release. The optional `-Version` argument must match it.
 
 ```powershell
 .\packaging\windows\build_windows.ps1 -Python python
+```
+
+The build uses the optimized IPhreeqc 3.8.6 library in this order:
+
+1. `-IPhreeqcDll` when explicitly supplied;
+2. `packaging\lib\IPhreeqc-3.8.6.dll` when present;
+3. otherwise it builds a Release x64 DLL from
+   `iphreeqc\iphreeqc-3.8.6-17100` with CMake.
+
+The selected DLL is bundled as `iphreeqc\IPhreeqc-3.8.6.dll`. A PyInstaller
+runtime hook sets `PHREEFIT_IPHREEQC_LIBRARY`, so `main_cal` does not fall back
+to phreeqpy's IPhreeqc 3.7.3 DLL.
+
+When the DLL is built from the repository source it includes the same one-step
+CD-MUSIC Modified Newton reuse, reduced activity-coefficient recomputation,
+local analytic potential columns, and memory-safety guards documented in
+`packaging/lib/README.md`. A prebuilt DLL supplied with `-IPhreeqcDll` must be
+built from the same source revision to provide those optimizations.
+
+To use an already compiled optimized DLL:
+
+```powershell
+.\packaging\windows\build_windows.ps1 -Python python `
+  -IPhreeqcDll C:\build\IPhreeqc-3.8.6.dll
 ```
 
 Outputs:

@@ -9,6 +9,7 @@ STAGE_SOURCE="$STAGE_ROOT/src_new"
 DIST_ROOT="$PROJECT_ROOT/dist/macos"
 VERSION=${PHREEFIT_VERSION:-}
 APP_PATH="$DIST_ROOT/PhreeFit.app"
+IPHREEQC_LIB=${PHREEFIT_IPHREEQC_LIBRARY:-"$PROJECT_ROOT/packaging/lib/libiphreeqc-3.8.6.dylib"}
 
 if [[ "$BUILD_ROOT" != "$PROJECT_ROOT/build/macos" || "$DIST_ROOT" != "$PROJECT_ROOT/dist/macos" ]]; then
     print -u2 "Refusing to clean unexpected build paths."
@@ -41,6 +42,16 @@ DMG_PATH="$DIST_ROOT/PhreeFit-$VERSION-$(uname -m).dmg"
     exit 1
 }
 
+if [[ ! -f "$IPHREEQC_LIB" ]]; then
+    print -u2 "Optimized IPhreeqc 3.8.6 library not found: $IPHREEQC_LIB"
+    exit 1
+fi
+IPHREEQC_ARCHS=$(/usr/bin/lipo -archs "$IPHREEQC_LIB")
+if [[ " $IPHREEQC_ARCHS " != *" $(uname -m) "* ]]; then
+    print -u2 "IPhreeqc architecture ($IPHREEQC_ARCHS) does not match build architecture ($(uname -m))."
+    exit 1
+fi
+
 rm -rf "$BUILD_ROOT" "$DIST_ROOT"
 mkdir -p "$STAGE_SOURCE" "$DIST_ROOT"
 /usr/bin/rsync -a \
@@ -53,6 +64,7 @@ mkdir -p "$STAGE_SOURCE" "$DIST_ROOT"
 export PHREEFIT_SOURCE_DIR="$STAGE_SOURCE"
 export PHREEFIT_CYTHON_BUILD_DIR="$BUILD_ROOT/cython"
 export PHREEFIT_VERSION="$VERSION"
+export PHREEFIT_IPHREEQC_LIBRARY="$IPHREEQC_LIB"
 export PYINSTALLER_CONFIG_DIR="$BUILD_ROOT/pyinstaller-config"
 
 "$PYTHON_BIN" "$SCRIPT_DIR/setup_main_cal.py" build_ext \

@@ -106,3 +106,5 @@ class WorkThreadAdvanced(QThread):
             self.msg["successful"] = False
             self.msg["error"] = str(e)
             self.signals.emit(self.msg)
+        finally:
+            mc.close_cached_iphreeqc()

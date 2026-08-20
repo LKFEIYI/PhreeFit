@@ -1,13 +1,15 @@
 # PhreeFit macOS packaging
 
-This build uses `src_new` as its only application source. It follows the old
-`PhreeFit-lean.spec`, but removes its fixed source path and detects the current
-Mac architecture and matching IPhreeqc library.
+This build uses `src_new` as its only application source and bundles PhreeFit's
+optimized IPhreeqc 3.8.6 library from
+`packaging/lib/libiphreeqc-3.8.6.dylib`. The packaged application selects this
+library explicitly instead of using phreeqpy's bundled IPhreeqc 3.7.3 library.
 
 ## Build an app and DMG
 
-Use an arm64 Python environment on Apple Silicon, or an x86_64 environment on
-an Intel Mac. All native dependencies must have the same architecture.
+The current optimized library is arm64, so the build requires an arm64 Python
+environment on Apple Silicon. All native dependencies must have the same
+architecture. The script checks the library architecture before building.
 
 The release version is read from `src_new/version.py`; update that file before
 building a new release. `PHREEFIT_VERSION` is optional and, when supplied, must
@@ -25,6 +27,18 @@ Output:
 
 The script copies `src_new` to `build/macos/stage` before compiling Cython, so
 generated C and extension files do not modify the source tree.
+
+To test another compatible 3.8.6 build without replacing the default file,
+set `PHREEFIT_IPHREEQC_LIBRARY` to its absolute path before invoking the build
+script. The selected library is bundled as
+`Contents/Frameworks/iphreeqc/libiphreeqc-3.8.6.dylib` and a PyInstaller
+runtime hook sets the path used by `main_cal`.
+
+The bundled binary includes one-step CD-MUSIC Modified Newton reuse, reduced
+activity-coefficient recomputation in numerical Jacobians, and supported local
+analytic CD-MUSIC potential columns. Exact activation/fallback conditions,
+performance results, SHA-256, and memory-safety validation are documented in
+`packaging/lib/README.md`.
 
 ## Local verification
 
@@ -64,6 +78,5 @@ spctl --assess --type open --context context:primary-signature --verbose=4 \
   dist/macos/PhreeFit-1.0.0-arm64.dmg
 ```
 
-To support both Intel and Apple Silicon, build and test separately on matching
-Python environments. The bundled `phreeqpy` libraries are architecture-specific;
-do not label a single-architecture build as universal.
+An Intel package requires a separately compiled and tested x86_64 version of
+the optimized IPhreeqc library; do not label this arm64 build as universal.
