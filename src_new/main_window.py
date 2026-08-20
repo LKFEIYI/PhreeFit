@@ -1,5 +1,6 @@
 """Main-window controller: signal wiring, UI state, and event handlers."""
 
+import copy
 import multiprocessing
 import os
 
@@ -609,12 +610,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             titration = settings.get("titration", {})
             advanced = settings.get("advanced", {})
 
+            load_warnings = []
             directories = common.get("directories", {})
+            if not isinstance(directories, dict):
+                directories = {}
             for attribute, key in (("data_folder", "data"), ("database_folder", "database"),
                                    ("output_folder", "output")):
                 directory = directories.get(key)
                 if directory and os.path.isdir(directory):
                     setattr(self, attribute, directory)
+                elif directory:
+                    load_warnings.append(
+                        f"Saved {key} directory is unavailable: {directory}"
+                    )
 
             self._restore_widgets(titration.get("widgets", {}))
             check_box_was_blocked = self.checkBox.blockSignals(True)
@@ -633,35 +641,46 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.actionDisabled.setChecked(not pre_equilibrate)
             self._restore_algorithm(common.get("algorithm", "Differential evolution"))
 
-            load_warnings = []
             database_path = common.get("database_path")
             self.database_path = database_path
             if database_path:
-                try:
-                    self._load_database_file(database_path)
-                except Exception as error_msg:
+                if not os.path.isfile(database_path):
                     self.database = None
-                    load_warnings.append("Database: " + str(error_msg))
+                    load_warnings.append("Database file not found: " + str(database_path))
+                else:
+                    try:
+                        self._load_database_file(database_path)
+                    except Exception as error_msg:
+                        self.database = None
+                        load_warnings.append("Database could not be loaded: " + str(error_msg))
             else:
                 self.database = None
 
             titration_path = titration.get("data_path")
             if titration_path:
-                try:
-                    self._load_titration_data(titration_path)
-                except Exception as error_msg:
+                if not os.path.isfile(titration_path):
                     self._clear_titration_data(titration_path)
-                    load_warnings.append("Titration data: " + str(error_msg))
+                    load_warnings.append("Titration data file not found: " + str(titration_path))
+                else:
+                    try:
+                        self._load_titration_data(titration_path)
+                    except Exception as error_msg:
+                        self._clear_titration_data(titration_path)
+                        load_warnings.append("Titration data could not be loaded: " + str(error_msg))
             else:
                 self._clear_titration_data()
 
             advanced_path = advanced.get("data_path")
             if advanced_path:
-                try:
-                    self._load_advanced_data(advanced_path)
-                except Exception as error_msg:
+                if not os.path.isfile(advanced_path):
                     self._clear_advanced_data(advanced_path)
-                    load_warnings.append("Advanced data: " + str(error_msg))
+                    load_warnings.append("Advanced data file not found: " + str(advanced_path))
+                else:
+                    try:
+                        self._load_advanced_data(advanced_path)
+                    except Exception as error_msg:
+                        self._clear_advanced_data(advanced_path)
+                        load_warnings.append("Advanced data could not be loaded: " + str(error_msg))
             else:
                 self._clear_advanced_data()
 
@@ -680,8 +699,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if load_warnings:
                 QMessageBox.warning(
                     self,
-                    "History",
-                    "Settings restored, but some files could not be loaded:\n" + "\n".join(load_warnings),
+                    "Settings loaded with unavailable paths",
+                    "All available settings were restored. The following saved paths are not "
+                    "available on this computer:\n\n"
+                    + "\n".join("• " + warning for warning in load_warnings)
+                    + "\n\nSelect replacement files or directories before running an optimization.",
                 )
             else:
                 QMessageBox.information(self, "History", "Settings loaded successfully")
@@ -752,13 +774,24 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @staticmethod
     def _format_init_guess(initial, bounds, parameter, indent=""):
         warning = ""
-        if isinstance(bounds, tuple) and len(bounds) >= 2:
+        if isinstance(bounds, (tuple, list)) and len(bounds) >= 2:
             try:
                 if initial < bounds[0] or initial > bounds[1]:
                     warning = "  OUT OF BOUNDS"
             except TypeError:
                 pass
         return f"{indent}initial {parameter}: {initial}{warning}\n"
+
+    @classmethod
+    def _format_parameter(cls, initial, value, parameter, bounds_label=None, indent=""):
+        """Format either an optimization range or a fixed parameter value."""
+        if isinstance(value, (tuple, list)) and len(value) >= 2:
+            label = bounds_label or f"{parameter} bounds"
+            return (
+                cls._format_init_guess(initial, value, parameter, indent)
+                + f"{indent}{label}: {value[0]} - {value[1]}\n"
+            )
+        return f"{indent}{parameter}: {value}\n"
 
     @staticmethod
     def _highlight_bounds_warnings(text_edit):
@@ -781,27 +814,21 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                                 + "IS:" + str(self.surf_eq[1]) + ")\n"
         for obj in self.op_obj:
             surface_reaction += obj.surface_name + "\n"
-            surface_reaction += self._format_init_guess(
-                obj.sfinitial[0], obj.surface_sites, "Sites"
+            surface_reaction += self._format_parameter(
+                obj.sfinitial[0], obj.surface_sites, "Sites", "bounds"
             )
-            surface_reaction += "bounds: " + str(obj.surface_sites[0]) + " - " + str(
-                obj.surface_sites[1]) + "\n"
             if self.comboBox_mdl.currentText() == "CCM":
-                surface_reaction += self._format_init_guess(
+                surface_reaction += self._format_parameter(
                     obj.sfinitial[1], obj.surface_C1, "C1"
                 )
-                surface_reaction += "C1 bounds: " + str(obj.surface_C1[0]) + " - " + str(
-                    obj.surface_C1[1]) + "\n"
             for react in obj.surface_reactions.keys():
                 surface_reaction += react + "\n"
-                surface_reaction += self._format_init_guess(
+                surface_reaction += self._format_parameter(
                     obj.surface_reactions[react][4],
                     obj.surface_reactions[react][0],
                     "log_k",
-                    "\t",
+                    indent="\t",
                 )
-                surface_reaction += "\t" + "log_k bounds: " + str(obj.surface_reactions[react][0][0]) + " - " + str(
-                    obj.surface_reactions[react][0][1]) + "\n"
         self.textEdit_sf.setText(surface_reaction)
         self._highlight_bounds_warnings(self.textEdit_sf)
 
@@ -815,7 +842,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return
         try:
             # print(self.output_folder)
-            task_name = QInputDialog.getText(None, "Task name", "Input here")[0]
+            task_name, accepted = QInputDialog.getText(
+                self, "Task name", "Input here"
+            )
+            if not accepted:
+                return
             self.config_file.update_config_file([self.data_folder,self.database_folder,self.output_folder])
             num_process = max(1, min(int(self.lineEdit_cycle.text()), multiprocessing.cpu_count()))
             pt = mc.Adsorption(self.comboBox_mdl.currentText())
@@ -846,8 +877,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 if i == len(self.op_obj) - 1:
                     pt.add_surface(self.op_obj[i])
                 else:
-                    self.op_obj[i].reset_cap(1, 1)
-                    pt.add_surface(self.op_obj[i])
+                    surface = copy.deepcopy(self.op_obj[i])
+                    surface.reset_cap(1, 1)
+                    pt.add_surface(surface)
             pt.selected_output({})
             pt.mix_action(initial_volume=initial_volume, mix_volume=self.mix_data)
             pt.get_bounds()
@@ -1268,8 +1300,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             )
             return
         try:
+            task_name, accepted = QInputDialog.getText(
+                self, "Task name", "Input here"
+            )
+            if not accepted:
+                return
             self.config_file.update_config_file([self.data_folder, self.database_folder, self.output_folder])
-            task_name = QInputDialog.getText(None, "Task name", "Input here")[0]
             num_process = max(1, min(int(self.lineEdit_cycle_2.text()), multiprocessing.cpu_count()))
             problem = mc.Adsorption(self.comboBox_mdl_2.currentText())
             if self.multi_is_ad == False:

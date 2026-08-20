@@ -291,11 +291,35 @@ def save_settings_file(path, settings):
 def load_settings_file(path):
     with open(path, "r", encoding="utf-8") as settings_file:
         settings = json.load(settings_file)
-    if not isinstance(settings, dict) or settings.get("format") != SETTINGS_FORMAT:
+    if not isinstance(settings, dict):
         raise ValueError("The selected file is not a PhreeFit settings file")
-    if settings.get("version") != SETTINGS_VERSION:
+
+    recognizable_sections = {"common", "titration", "advanced"}
+    if not recognizable_sections.intersection(settings):
+        raise ValueError("The selected file is not a PhreeFit settings file")
+
+    format_name = settings.get("format")
+    if format_name not in (None, SETTINGS_FORMAT):
+        raise ValueError("The selected file is not a PhreeFit settings file")
+
+    version = settings.get("version", SETTINGS_VERSION)
+    try:
+        version = int(version)
+    except (TypeError, ValueError) as error:
+        raise ValueError("Invalid PhreeFit settings version") from error
+    if version != SETTINGS_VERSION:
         raise ValueError("Unsupported PhreeFit settings version")
-    return settings
+
+    normalized = dict(settings)
+    normalized["format"] = SETTINGS_FORMAT
+    normalized["version"] = SETTINGS_VERSION
+    for section in recognizable_sections:
+        value = normalized.get(section)
+        if value is None:
+            normalized[section] = {}
+        elif not isinstance(value, dict):
+            raise ValueError(f"Invalid '{section}' section in PhreeFit settings")
+    return normalized
 
 
 class ConfigFile:
