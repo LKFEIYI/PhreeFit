@@ -3,6 +3,10 @@
 /unit_test/
 /dist/
 /build/
+/benchmarks/
+
+# Local settings and generated JSON data
+*.json
 
 # Python bytecode and interpreter caches
 __pycache__/
@@ -25,6 +29,11 @@ htmlcov/
 .eggs/
 *.so
 *.pyd
+
+# IPhreeqc out-of-source build trees (keep the source tree trackable)
+/iphreeqc/**/_build/
+/iphreeqc/**/build/
+/iphreeqc/**/cmake-build-*/
 
 # macOS metadata
 .DS_Store

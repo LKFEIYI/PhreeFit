@@ -694,9 +694,9 @@ def optimize_problem(mix_or_eq, method, x0, bounds, maxiter=1000, core=1, t=5230
             }
         elif extra_para[-2].p_type == "CCM":
             param_de = {
-                'strategy': "best1bin",
+                'strategy': "best1exp",
                 'init': "halton",
-                'recombination': 0.8,
+                'recombination': 0.9,
             }
         if core > 1:
             de_results = differential_evolution(residual_func, bounds=bounds, x0=x0, maxiter=maxiter, updating="deferred",
