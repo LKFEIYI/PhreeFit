@@ -55,6 +55,8 @@ class OptimizationController(QObject):
         window = self.window
         window.pushButton_opt.setEnabled(not running)
         window.pushButton_opt_2.setEnabled(not running)
+        window.pushButton_sensitivity.setEnabled(not running)
+        window.pushButton_sensitivity_2.setEnabled(not running)
         window.comboBox_mdl.setEnabled(not running)
         window.comboBox_mdl_2.setEnabled(not running)
         window.checkBox.setEnabled(not running)

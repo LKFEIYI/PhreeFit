@@ -601,7 +601,8 @@ def proto_fun(p, exp_data, titration: Adsorption, mix=False):
     return np.linalg.norm(error)
 
 
-def advanced_evaluation(exp_data, results, titration: Adsorption, mix=False, auto_p=False, eq=None, ph_list=None,error=None):
+def advanced_evaluation(exp_data, results, titration: Adsorption, mix=False, auto_p=False,
+                        eq=None, ph_list=None, error=None, stop_requested=None):
     p = results.x
     titration.set_para(p)
 
@@ -628,7 +629,30 @@ def advanced_evaluation(exp_data, results, titration: Adsorption, mix=False, aut
     else:
         error_list=error
     reduced_chi=reduced_x2(exp_data, model_res,error_list,len(exp_data)-len(p))
-    return raw_r2, adj_r2, BIC, rms, results.nfev, model_res, titration.sms, all_output,reduced_chi
+    try:
+        # Local import keeps the optimization/calculation module independent of
+        # sensitivity-analysis implementation details during module loading.
+        from .sensitivity import estimate_parameter_uncertainty
+        mix_mode = 0 if mix else (2 if auto_p else 1)
+        parameter_uncertainty = estimate_parameter_uncertainty(
+            problem=titration,
+            optimal_parameters=p,
+            experimental_data=exp_data,
+            baseline_response=model_res,
+            bounds=titration.bounds,
+            error_list=error_list,
+            mix_mode=mix_mode,
+            ph_list=ph_list,
+            eq_phase=eq,
+            stop_requested=stop_requested,
+        )
+    except OptimizationCancelled:
+        raise
+    except Exception:
+        parameter_uncertainty = np.full(len(p), np.nan, dtype=float)
+    titration.set_para(p)
+    return (raw_r2, adj_r2, BIC, rms, results.nfev, model_res, titration.sms,
+            all_output, reduced_chi, parameter_uncertainty)
 
 
 def run_phreeqc_ad(titration: Adsorption):

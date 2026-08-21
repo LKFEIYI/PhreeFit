@@ -7,6 +7,12 @@ import numpy as np
 from PySide6.QtCore import QThread, Signal
 
 from . import main_cal as mc
+from .sensitivity import (
+    build_parameter_specs,
+    calculate_local_sensitivity,
+    calculate_morris_sensitivity,
+    save_sensitivity_result,
+)
 
 
 class WorkThreadAdvanced(QThread):
@@ -68,10 +74,14 @@ class WorkThreadAdvanced(QThread):
             if self.stop_requested():
                 raise mc.OptimizationCancelled("Terminated by user")
             eva = mc.advanced_evaluation(exp_data=self.p2, titration=self.p1, results=results, mix=mix, eq=self.eq,
-                                         ph_list=self.ph_list, auto_p=auto_ph, error=self.error_list)
+                                         ph_list=self.ph_list, auto_p=auto_ph, error=self.error_list,
+                                         stop_requested=self.stop_requested)
             res_str += "Optimized parameters: "
-            for x in results.x:
-                res_str += str(x) + "  "
+            for x, uncertainty in zip(results.x, eva[9]):
+                uncertainty_text = (
+                    f"{uncertainty:.3g}" if np.isfinite(uncertainty) else "n/a"
+                )
+                res_str += f"{x:.8g}({uncertainty_text})  "
             res_str += "\n" + "R2" + "\t" + "adj. R2" + "\t" + "BIC"  + "\t" + "RMSE" + "\t" + "V(Y)"+ "\t" + "Evaluations" + "\n"
             for y in eva[0:3]:
                 res_str += "{:.5f}".format(y) + "\t"
@@ -93,6 +103,11 @@ class WorkThreadAdvanced(QThread):
                 }
                 for surface in self.p1.surface
             ]
+            self.msg["parameters"] = results.x.tolist()
+            self.msg["parameter_uncertainty"] = eva[9].tolist()
+            self.msg["parameter_names"] = [
+                spec["name"] for spec in build_parameter_specs(self.p1)
+            ]
             self.msg["iterations"] = eva[4]
             self.signals.emit(self.msg)
         except mc.OptimizationCancelled as e:
@@ -108,3 +123,86 @@ class WorkThreadAdvanced(QThread):
             self.signals.emit(self.msg)
         finally:
             mc.close_cached_iphreeqc()
+
+
+class SensitivityWorker(QThread):
+    """Run Morris or local sensitivity evaluations without blocking Qt."""
+
+    signals = Signal(dict)
+    progress = Signal(int, int, str)
+
+    def __init__(
+            self, problem, baseline, selected_indexes, perturbation_percent,
+            mix_mode, x_values, x_label, response_label, task_name,
+            output_folder, parameter_specs, method="morris", trajectories=10, levels=4,
+            random_seed=42, mode_label=None, ph_list=None, eq_phase=None, parent=None):
+        super().__init__(parent)
+        self.problem = problem
+        self.baseline = baseline
+        self.selected_indexes = selected_indexes
+        self.perturbation_percent = perturbation_percent
+        self.mix_mode = mix_mode
+        self.x_values = x_values
+        self.x_label = x_label
+        self.response_label = response_label
+        self.task_name = task_name
+        self.output_folder = output_folder
+        self.parameter_specs = parameter_specs
+        self.method = method
+        self.trajectories = trajectories
+        self.levels = levels
+        self.random_seed = random_seed
+        self.mode_label = mode_label
+        self.ph_list = ph_list
+        self.eq_phase = eq_phase
+        self.msg = {}
+        self._stop_event = threading.Event()
+
+    def request_stop(self):
+        self._stop_event.set()
+        self.requestInterruption()
+
+    def stop_requested(self):
+        return self._stop_event.is_set() or self.isInterruptionRequested()
+
+    def run(self):
+        try:
+            common = {
+                "problem": self.problem,
+                "baseline_parameters": self.baseline,
+                "selected_indexes": self.selected_indexes,
+                "mix_mode": self.mix_mode,
+                "x_values": self.x_values,
+                "x_label": self.x_label,
+                "response_label": self.response_label,
+                "task": self.task_name,
+                "mode_label": self.mode_label,
+                "ph_list": self.ph_list,
+                "eq_phase": self.eq_phase,
+                "stop_requested": self.stop_requested,
+                "progress": lambda current, total, name: self.progress.emit(current, total, name),
+                "parameter_specs": self.parameter_specs,
+            }
+            if self.method == "morris":
+                result = calculate_morris_sensitivity(
+                    trajectories=self.trajectories,
+                    levels=self.levels,
+                    random_seed=self.random_seed,
+                    **common,
+                )
+            else:
+                result = calculate_local_sensitivity(
+                    perturbation_percent=self.perturbation_percent,
+                    **common,
+                )
+            if self.stop_requested():
+                raise mc.OptimizationCancelled("Sensitivity analysis cancelled by user")
+            save_sensitivity_result(result, self.output_folder)
+            self.msg = {"successful": True, "result": result}
+        except mc.OptimizationCancelled as error:
+            self.msg = {"successful": False, "cancelled": True, "error": str(error)}
+        except Exception as error:
+            self.msg = {"successful": False, "cancelled": False, "error": str(error)}
+        finally:
+            mc.close_cached_iphreeqc()
+            self.signals.emit(self.msg)

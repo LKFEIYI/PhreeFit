@@ -30,10 +30,16 @@ from .io_service import (
     write_log,
     write_results,
 )
-from .post_plot import HistoryComparisonDialog, read_optimization_history
+from .post_plot import (
+    HistoryComparisonDialog,
+    SensitivityResultsDialog,
+    SensitivitySettingsDialog,
+    read_optimization_history,
+)
+from .sensitivity import build_parameter_specs
 from .table_model import TableModel
 from .ui.main_window_ui import MainWindowLayoutManager, Ui_MainWindow
-from .workers import WorkThreadAdvanced
+from .workers import SensitivityWorker, WorkThreadAdvanced
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -60,6 +66,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.last_settings_mode = "titration"
         self.work = None
         self.work2 = None
+        self.sensitivity_work = None
+        self.sensitivity_mode = None
+        self.pending_sensitivity_message = None
+        self.last_sensitivity_configuration = {"titration": None, "advanced": None}
+        self.last_optimized_parameters = {"titration": None, "advanced": None}
+        self.last_optimized_parameter_names = {"titration": None, "advanced": None}
 
         pg.setConfigOptions(leftButtonPan=False)
         pg.setConfigOption("background", "w")
@@ -127,6 +139,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.pushButton_db.clicked.connect(self.load_database)
         self.pushButton_rd.clicked.connect(self.showOpendialog)
         self.pushButton_opt.clicked.connect(self.optimize_data)
+        self.pushButton_sensitivity.clicked.connect(
+            lambda: self.start_sensitivity_analysis("titration")
+        )
         self.pushButton_addsf.clicked.connect(self.check_sp)
         self.pushButton_review.clicked.connect(self.show_surface)
         self.pushButton_cls.clicked.connect(self.clear_sp)
@@ -143,6 +158,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.pushButton_delreact.clicked.connect(self.del_reaction)
         self.pushButton_cls_4.clicked.connect(self.clear_all)
         self.pushButton_opt_2.clicked.connect(self.advanced_opt)
+        self.pushButton_sensitivity_2.clicked.connect(
+            lambda: self.start_sensitivity_analysis("advanced")
+        )
         self.pushButton_stp_2.clicked.connect(self.stop_thread2)
 
         self.actiondifferential_evolution.triggered.connect(self.differential_evolution)
@@ -182,7 +200,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             checkbox.toggled.connect(self._sync_advanced_surface_controls)
 
     def _optimization_busy(self):
-        return self.optimization_controller.busy()
+        return self.optimization_controller.busy() or self._sensitivity_running()
+
+    def _sensitivity_running(self):
+        return self.sensitivity_work is not None and self.sensitivity_work.isRunning()
 
     def _set_optimization_controls(self, running=False, mode=None):
         self.optimization_controller.set_controls(running, mode)
@@ -832,6 +853,312 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.textEdit_sf.setText(surface_reaction)
         self._highlight_bounds_warnings(self.textEdit_sf)
 
+    @staticmethod
+    def _flatten_model_x(data, column_name):
+        if hasattr(data, "groups"):
+            values = []
+            for group_name in data.groups.keys():
+                values.extend(data.get_group(group_name)[column_name].to_list())
+            return values
+        return list(data)
+
+    def _prepare_titration_problem(self):
+        problem = mc.Adsorption(self.comboBox_mdl.currentText())
+        if self.multi_is is False:
+            sodium = [float(self.lineEdit_cs.text())]
+        else:
+            sodium = list(self.mix_data.groups.keys())
+        problem.species_definition(self.database, None)
+        problem.initial_solution(
+            sodium,
+            initial_pH=float(self.lineEdit_ph.text()),
+            cation="Na",
+            anion="Cl",
+            metal={},
+        )
+        problem.set_type_acid(
+            type_acid=self.comboBox_ad.currentText(),
+            type_base=self.comboBox_bs.currentText(),
+        )
+        if self.radioButton_fx.isChecked():
+            problem.mix_solution(
+                type_solution="fix_pH",
+                base_pH=float(self.lineEdit_base.text()),
+                acid_pH=float(self.lineEdit_acid.text()),
+            )
+        elif self.radioButton_ds.isChecked():
+            problem.mix_solution(
+                type_solution="dissolution",
+                base_mass=float(self.lineEdit_base.text()),
+                acid_mass=float(self.lineEdit_acid.text()),
+            )
+        else:
+            raise ValueError("Select Fix pH or Dissolution for the titration solution.")
+        if self.actionEnabled.isChecked() and self.surf_eq is not None:
+            problem.equilibrate_solution(self.surf_eq[1], self.surf_eq[0])
+        for index, original_surface in enumerate(self.op_obj):
+            surface = copy.deepcopy(original_surface)
+            # The established Titration/CCM behavior fits C1 only for the last surface.
+            if index != len(self.op_obj) - 1:
+                surface.reset_cap(1, 1)
+            problem.add_surface(surface)
+        problem.selected_output({})
+        problem.mix_action(
+            initial_volume=float(self.lineEdit_vol.text()),
+            mix_volume=self.mix_data,
+        )
+        problem.get_bounds()
+        return {
+            "problem": problem,
+            "mix_mode": 0,
+            "ph_list": None,
+            "eq_phase": None,
+            "x_values": self._flatten_model_x(self.mix_data, "volume"),
+            "x_label": "Volume",
+            "response_label": "pH",
+            "mode_label": "Titration",
+        }
+
+    def _prepare_advanced_problem(self):
+        problem = mc.Adsorption(self.comboBox_mdl_2.currentText())
+        if self.multi_is_ad is False:
+            sodium = [float(self.lineEdit_cs_2.text())]
+        else:
+            sodium = list(self.mix_data_ad.groups.keys())
+        metal_name = self.lineEdit_reactant.text().strip()
+        metal = {} if not metal_name else {metal_name: float(self.lineEdit_moles.text())}
+        problem.species_definition(self.database, None)
+        problem.initial_solution(
+            sodium,
+            initial_pH=float(self.lineEdit_ph_4.text()),
+            cation=self.lineEdit_cation.text(),
+            anion=self.lineEdit_anion.text(),
+            metal=metal,
+        )
+        target_component = self.lineEdit_output.text()
+        problem.selected_output(output={self.comboBox.currentText(): target_component})
+        problem.set_type_acid(
+            type_acid=self.comboBox_ad_2.currentText(),
+            type_base=self.comboBox_bs_2.currentText(),
+        )
+        for surface in self.opad:
+            problem.add_surface(copy.deepcopy(surface))
+
+        ph_list = None
+        eq_phase = None
+        if self.checkBox.isChecked():
+            problem.selected_output({})
+            if self.radioButton_fx_2.isChecked():
+                problem.mix_solution(
+                    type_solution="fix_pH",
+                    base_pH=float(self.lineEdit_base_2.text()),
+                    acid_pH=float(self.lineEdit_acid_2.text()),
+                )
+            elif self.radioButton_ds_2.isChecked():
+                problem.mix_solution(
+                    type_solution="dissolution",
+                    base_mass=float(self.lineEdit_base_2.text()),
+                    acid_mass=float(self.lineEdit_acid_2.text()),
+                )
+            else:
+                raise ValueError("Select Fix pH or Dissolution for the titration solution.")
+            if self.actionEnabled.isChecked() and self.surf_eq is not None:
+                problem.equilibrate_solution(self.surf_eq[1], self.surf_eq[0])
+            problem.mix_action(
+                initial_volume=float(self.lineEdit_ph_5.text()),
+                mix_volume=self.mix_data_ad,
+            )
+            mix_mode = 0
+            x_values = self._flatten_model_x(self.mix_data_ad, "volume")
+            x_label = "Volume"
+            response_label = "pH"
+            mode_label = "Advanced / Titration"
+        else:
+            eq_phase = self.textEdit.toPlainText()
+            if self.checkBox_7.isChecked():
+                mix_mode = 2
+                ph_list = self.mix_data_ad
+            else:
+                mix_mode = 1
+                separated_ph = len(sodium) * [float(self.lineEdit_base_2.text())]
+                problem.eq_ph(
+                    ph_list=self.mix_data_ad,
+                    eq_phase=eq_phase,
+                    ph_sep=separated_ph,
+                    auto_p=False,
+                )
+            x_values = self._flatten_model_x(self.mix_data_ad, "amounts")
+            x_label = "Amount"
+            response_label = target_component.strip() or "Response"
+            mode_label = "Advanced / Adsorption"
+        problem.get_bounds()
+        return {
+            "problem": problem,
+            "mix_mode": mix_mode,
+            "ph_list": ph_list,
+            "eq_phase": eq_phase,
+            "x_values": x_values,
+            "x_label": x_label,
+            "response_label": response_label,
+            "mode_label": mode_label,
+        }
+
+    def _set_sensitivity_controls(self, running=False, mode=None):
+        for widget in (
+            self.pushButton_opt,
+            self.pushButton_opt_2,
+            self.comboBox_mdl,
+            self.comboBox_mdl_2,
+            self.checkBox,
+            self.radioButton_mode_adsorption,
+            self.radioButton_mode_titration,
+        ):
+            widget.setEnabled(not running)
+        self.pushButton_sensitivity.setEnabled(not running or mode == "titration")
+        self.pushButton_sensitivity_2.setEnabled(not running or mode == "advanced")
+        self.pushButton_sensitivity.setText(
+            "Cancel sensitivity" if running and mode == "titration" else "Sensitivity"
+        )
+        self.pushButton_sensitivity_2.setText(
+            "Cancel sensitivity" if running and mode == "advanced" else "Sensitivity"
+        )
+
+    def start_sensitivity_analysis(self, mode):
+        if self._sensitivity_running():
+            if mode == self.sensitivity_mode:
+                self.sensitivity_work.request_stop()
+                self.activity_status_label.setText("Cancelling sensitivity analysis…")
+                active_button = (
+                    self.pushButton_sensitivity
+                    if mode == "titration" else self.pushButton_sensitivity_2
+                )
+                active_button.setEnabled(False)
+            return
+        if self.optimization_controller.busy():
+            QMessageBox.information(
+                self,
+                "Optimization running",
+                "Stop or wait for the current optimization before sensitivity analysis.",
+            )
+            return
+        try:
+            prepared = (
+                self._prepare_titration_problem()
+                if mode == "titration" else self._prepare_advanced_problem()
+            )
+            problem = prepared["problem"]
+            parameter_specs = build_parameter_specs(problem)
+            if not parameter_specs:
+                QMessageBox.warning(
+                    self,
+                    "No fitting variables",
+                    "Add at least one fitted parameter before sensitivity analysis.",
+                )
+                return
+            names = [spec["name"] for spec in parameter_specs]
+            last_optimized = None
+            if self.last_optimized_parameter_names.get(mode) == names:
+                candidate = self.last_optimized_parameters.get(mode)
+                if candidate is not None and all(
+                        float(spec["lower"]) <= float(value) <= float(spec["upper"])
+                        for spec, value in zip(parameter_specs, candidate)
+                ):
+                    last_optimized = candidate
+            settings = SensitivitySettingsDialog(
+                parameter_specs,
+                last_optimized=last_optimized,
+                output_folder=self.output_folder,
+                initial_configuration=self.last_sensitivity_configuration.get(mode),
+                parent=self,
+            )
+            if not settings.exec():
+                return
+            configuration = settings.configuration()
+            self.last_sensitivity_configuration[mode] = configuration
+            self.config_file.update_config_file(
+                [self.data_folder, self.database_folder, self.output_folder]
+            )
+            worker = SensitivityWorker(
+                problem=problem,
+                baseline=configuration["baseline"],
+                selected_indexes=configuration["selected_indexes"],
+                perturbation_percent=configuration["perturbation_percent"],
+                mix_mode=prepared["mix_mode"],
+                x_values=prepared["x_values"],
+                x_label=prepared["x_label"],
+                response_label=prepared["response_label"],
+                task_name=configuration["task"],
+                output_folder=self.output_folder,
+                parameter_specs=parameter_specs,
+                method=configuration["method"],
+                trajectories=configuration["trajectories"],
+                levels=configuration["levels"],
+                random_seed=configuration["random_seed"],
+                mode_label=prepared["mode_label"],
+                ph_list=prepared["ph_list"],
+                eq_phase=prepared["eq_phase"],
+                parent=self,
+            )
+            worker.progress.connect(self._update_sensitivity_progress)
+            worker.signals.connect(self._display_sensitivity_result)
+            worker.finished.connect(self._sensitivity_finished)
+            self.sensitivity_work = worker
+            self.sensitivity_mode = mode
+            self.pending_sensitivity_message = None
+            self._set_sensitivity_controls(True, mode)
+            self.activity_status_label.setText(
+                f"Sensitivity | Task: {configuration['task']} | Preparing baseline"
+            )
+            worker.start()
+        except Exception as error:
+            write_log("Sensitivity: " + str(error), self.output_folder)
+            QMessageBox.warning(
+                self, "Sensitivity", "Unable to start sensitivity analysis:\n" + str(error)
+            )
+
+    def _update_sensitivity_progress(self, current, total, parameter_name):
+        task_name = getattr(self.sensitivity_work, "task_name", "sensitivity")
+        if current == 0:
+            progress_text = "Baseline calculated"
+        else:
+            progress_text = f"Run {current}/{total}: {parameter_name}"
+        self.activity_status_label.setText(
+            f"Sensitivity | Task: {task_name} | {progress_text}"
+        )
+
+    def _display_sensitivity_result(self, message):
+        self.pending_sensitivity_message = message
+
+    def _handle_sensitivity_result(self, message, mode):
+        if message.get("successful"):
+            result = message["result"]
+            self.activity_status_label.setText(
+                "Sensitivity completed | " + self._short_path(result.json_path)
+            )
+            dialog = SensitivityResultsDialog(result, self)
+            dialog.exec()
+            if dialog.back_requested:
+                self.start_sensitivity_analysis(mode)
+        elif message.get("cancelled"):
+            self.activity_status_label.setText("Sensitivity analysis cancelled")
+        else:
+            error = message.get("error", "Unknown sensitivity error")
+            write_log("Sensitivity: " + error, self.output_folder)
+            self.activity_status_label.setText("Sensitivity analysis failed")
+            QMessageBox.warning(self, "Sensitivity", "Sensitivity analysis failed:\n" + error)
+
+    def _sensitivity_finished(self):
+        worker = self.sender()
+        mode = self.sensitivity_mode
+        message = self.pending_sensitivity_message or getattr(worker, "msg", {})
+        if worker is self.sensitivity_work:
+            self.sensitivity_work = None
+            self.sensitivity_mode = None
+            self.pending_sensitivity_message = None
+        self._set_sensitivity_controls(False)
+        worker.deleteLater()
+        self._handle_sensitivity_result(message, mode)
+
     def optimize_data(self):
         if self._optimization_busy():
             QMessageBox.information(
@@ -849,40 +1176,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 return
             self.config_file.update_config_file([self.data_folder,self.database_folder,self.output_folder])
             num_process = max(1, min(int(self.lineEdit_cycle.text()), multiprocessing.cpu_count()))
-            pt = mc.Adsorption(self.comboBox_mdl.currentText())
-            if self.multi_is == False:
-                Na = [float(self.lineEdit_cs.text())]
-            elif self.multi_is == True:
-                Na = list(self.mix_data.groups.keys())
-            initial_ph = float(self.lineEdit_ph.text())
-            initial_volume = float(self.lineEdit_vol.text())
-            pt.species_definition(self.database, None)
-            pt.initial_solution(Na, initial_pH=initial_ph, cation="Na", anion="Cl", metal={})
-            pt.set_type_acid(type_acid=self.comboBox_ad.currentText(), type_base=self.comboBox_bs.currentText())
-            if self.radioButton_fx.isChecked() == True:
-                type_solution = "fix_pH"
-                pt.mix_solution(type_solution=type_solution, base_pH=float(self.lineEdit_base.text()),
-                                acid_pH=float(self.lineEdit_acid.text()))
-            elif self.radioButton_ds.isChecked() == True:
-                type_solution = "dissolution"
-                pt.mix_solution(type_solution=type_solution, base_mass=float(self.lineEdit_base.text()),
-                                acid_mass=float(self.lineEdit_acid.text()))
-            else:
-                QMessageBox.information(None, "warning", "Please check your input in dissolution",
-                                        QMessageBox.Yes | QMessageBox.No)
-            if self.actionEnabled.isChecked() == True and self.surf_eq != None:
-                pt.equilibrate_solution(self.surf_eq[1], self.surf_eq[0])
-            for i in range(0, len(self.op_obj)):
-                # print(self.op_obj[i].surface_name)
-                if i == len(self.op_obj) - 1:
-                    pt.add_surface(self.op_obj[i])
-                else:
-                    surface = copy.deepcopy(self.op_obj[i])
-                    surface.reset_cap(1, 1)
-                    pt.add_surface(surface)
-            pt.selected_output({})
-            pt.mix_action(initial_volume=initial_volume, mix_volume=self.mix_data)
-            pt.get_bounds()
+            prepared = self._prepare_titration_problem()
+            pt = prepared["problem"]
+            if not pt.bounds:
+                QMessageBox.warning(self, "No fitting variables", "Add at least one fitted parameter before optimizing.")
+                return
             worker = WorkThreadAdvanced()
             worker.set_pa(pt, self.ph_res, int(self.lineEdit_iter.text()), int(self.lineEdit_temp.text()), mix=0,
                           method=self.method_selected, process_num=num_process, task=task_name,
@@ -902,6 +1200,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             write_log(ssss["Task"] + '\n' + ssss["error"], self.output_folder)
         elif ssss["successful"] == True:
             self.optimization_controller.set_outcome("Completed")
+            self.last_optimized_parameters["titration"] = ssss.get("parameters")
+            self.last_optimized_parameter_names["titration"] = ssss.get("parameter_names")
             if ssss["iterations"] < int(self.lineEdit_iter.text()) and self.method_selected == "Differential evolution":
                 QMessageBox.information(None, "warning", "The iterations of DE method is rather few, please rerun or change some settings",
                                         QMessageBox.Yes | QMessageBox.No)
@@ -1307,65 +1607,26 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 return
             self.config_file.update_config_file([self.data_folder, self.database_folder, self.output_folder])
             num_process = max(1, min(int(self.lineEdit_cycle_2.text()), multiprocessing.cpu_count()))
-            problem = mc.Adsorption(self.comboBox_mdl_2.currentText())
-            if self.multi_is_ad == False:
-                Na = [float(self.lineEdit_cs_2.text())]
-            elif self.multi_is_ad == True:
-                Na = list(self.mix_data_ad.groups.keys())
-            initial_ph = float(self.lineEdit_ph_4.text())
-            initial_volume = float(self.lineEdit_ph_5.text())
-            metal_name = self.lineEdit_reactant.text()
-            if metal_name.strip() == "":
-                metal = {}
-            else:
-                metal_amounts = float(self.lineEdit_moles.text())
-                metal = {metal_name: metal_amounts}
-            target_com = self.lineEdit_output.text()
-            problem.species_definition(self.database, None)
-            problem.initial_solution(Na, initial_pH=initial_ph, cation=self.lineEdit_cation.text(),
-                                     anion=self.lineEdit_anion.text(),
-                                     metal=metal)
-            problem.selected_output(output={self.comboBox.currentText(): target_com})
-            problem.set_type_acid(type_acid=self.comboBox_ad_2.currentText(),
-                                  type_base=self.comboBox_bs_2.currentText())
-            for items in self.opad:
-                problem.add_surface(items)
-            if self.checkBox.isChecked() == True:
-                problem.selected_output({}) #reset the output
-                if self.radioButton_fx_2.isChecked() == True:
-                    type_solution = "fix_pH"
-                    problem.mix_solution(type_solution=type_solution, base_pH=float(self.lineEdit_base_2.text()),
-                                         acid_pH=float(self.lineEdit_acid_2.text()))
-                elif self.radioButton_ds_2.isChecked() == True:
-                    type_solution = "dissolution"
-                    problem.mix_solution(type_solution=type_solution, base_mass=float(self.lineEdit_base_2.text()),
-                                         acid_mass=float(self.lineEdit_acid_2.text()))
-                if self.actionEnabled.isChecked() == True and self.surf_eq != None:
-                    problem.equilibrate_solution(self.surf_eq[1], self.surf_eq[0])
-                problem.mix_action(initial_volume=initial_volume, mix_volume=self.mix_data_ad)
-                problem.get_bounds()
-                worker = WorkThreadAdvanced()
-                worker.set_pa(problem, self.ph_res_ad, int(self.lineEdit_iter_2.text()),
-                              int(self.lineEdit_temp_2.text()), mix=0, method=self.method_selected,
-                              process_num=num_process, task=task_name,
-                              error_list=self.error_list_advanced)
-                self._start_optimization_worker(worker, "advanced")
-            else:
-                sep_ph = len(Na) * [float(self.lineEdit_base_2.text())]
-                if self.checkBox_7.isChecked() == True:
-                    mix = 2
-                else:
-                    mix = 1
-                    problem.eq_ph(ph_list=self.mix_data_ad, eq_phase=self.textEdit.toPlainText(), ph_sep=sep_ph,
-                                  auto_p=False)
-                problem.get_bounds()
-                worker = WorkThreadAdvanced()
-                worker.set_pa(problem, self.ph_res_ad, int(self.lineEdit_iter_2.text()),
-                              int(self.lineEdit_temp_2.text()),
-                              mix=mix, ph_list=self.mix_data_ad, eq=self.textEdit.toPlainText(),
-                              method=self.method_selected, process_num=num_process, task=task_name,
-                              error_list=self.error_list_advanced)
-                self._start_optimization_worker(worker, "advanced")
+            prepared = self._prepare_advanced_problem()
+            problem = prepared["problem"]
+            if not problem.bounds:
+                QMessageBox.warning(self, "No fitting variables", "Uncheck Fix for at least one applicable parameter before optimizing.")
+                return
+            worker = WorkThreadAdvanced()
+            worker.set_pa(
+                problem,
+                self.ph_res_ad,
+                int(self.lineEdit_iter_2.text()),
+                int(self.lineEdit_temp_2.text()),
+                mix=prepared["mix_mode"],
+                ph_list=prepared["ph_list"],
+                eq=prepared["eq_phase"],
+                method=self.method_selected,
+                process_num=num_process,
+                task=task_name,
+                error_list=self.error_list_advanced,
+            )
+            self._start_optimization_worker(worker, "advanced")
         except Exception as e:
             write_log(str(e), self.output_folder)
             if not self._optimization_busy():
@@ -1380,6 +1641,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             write_log(ssss["Task"] + '\n' + ssss["error"], self.output_folder)
         elif ssss["successful"] == True:
             self.optimization_controller.set_outcome("Completed")
+            self.last_optimized_parameters["advanced"] = ssss.get("parameters")
+            self.last_optimized_parameter_names["advanced"] = ssss.get("parameter_names")
             if ssss["iterations"] < int(self.lineEdit_iter_2.text()) and self.method_selected == "Differential evolution":
                 QMessageBox.information(None, "warning", "The iterations of DE method is rather few, please rerun or change some settings",
                                         QMessageBox.Yes | QMessageBox.No)
@@ -1513,6 +1776,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             QMessageBox.No,
         )
         if result == QMessageBox.Yes:
+            if self._sensitivity_running():
+                self.sensitivity_work.request_stop()
+                if not self.sensitivity_work.wait(5000):
+                    QMessageBox.information(
+                        self,
+                        "Sensitivity stopping",
+                        "The sensitivity analysis is still stopping. Please wait and close the application again.",
+                    )
+                    event.ignore()
+                    return
             if not self.optimization_controller.stop_all_and_wait(5000):
                 QMessageBox.information(
                     self,

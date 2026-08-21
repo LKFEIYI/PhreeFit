@@ -9,25 +9,36 @@ import shutil
 import tempfile
 import time
 
+import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QRectF, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
+    QFileDialog,
+    QFormLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPushButton,
+    QSpinBox,
+    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
+
+from .sensitivity import load_sensitivity_result
 
 
 _CTIME_PATTERN = re.compile(
@@ -358,6 +369,480 @@ class NumericTableWidgetItem(QTableWidgetItem):
         if isinstance(other, NumericTableWidgetItem):
             return self.numeric_value < other.numeric_value
         return super().__lt__(other)
+
+
+def _show_sensitivity_help(parent, method):
+    """Show a compact guide for interpreting the selected sensitivity method."""
+    if method == "morris":
+        details = (
+            "Morris screening\n\n"
+            "• μ*: Overall importance. A larger value means the parameter has a "
+            "stronger influence on the model response.\n"
+            "• σ: Nonlinearity or interactions. A large σ relative to μ* suggests "
+            "that the effect changes across the parameter range or depends on other parameters.\n"
+            "• μ: Mean direction of the effect. A value near zero can also result from "
+            "positive and negative effects cancelling each other.\n"
+            "• μ* heatmap: Shows where along the response curve each parameter is influential."
+        )
+    else:
+        details = (
+            "Local finite difference\n\n"
+            "• Importance: Average absolute influence near the selected baseline. "
+            "Larger values indicate a stronger local effect.\n"
+            "• Sensitivity sign: Positive means the response rises as the parameter "
+            "increases; negative means it falls.\n"
+            "• Sensitivity heatmap: Shows where along the response curve the effect occurs.\n"
+            "• Correlation: |r| near 1 means two parameters produce similar sensitivity "
+            "patterns and may be difficult to distinguish during fitting."
+        )
+    QMessageBox.information(
+        parent,
+        "Interpreting sensitivity results",
+        details
+        + "\n\nInterpret rankings within the same run and method. Confirm important conclusions "
+          "with suitable bounds and, for Morris, enough trajectories; local results only "
+          "describe behavior near the chosen baseline.",
+    )
+
+
+class SensitivitySettingsDialog(QDialog):
+    """Select a baseline and fitted parameters for local sensitivity analysis."""
+
+    def __init__(self, parameter_specs, last_optimized=None, output_folder=None,
+                 initial_configuration=None, parent=None):
+        super().__init__(parent)
+        self.parameter_specs = parameter_specs
+        self.last_optimized = last_optimized
+        self.output_folder = output_folder or os.getcwd()
+        self.initial_configuration = initial_configuration or {}
+        self.setWindowTitle("Local sensitivity analysis")
+        self.resize(760, 560)
+
+        layout = QVBoxLayout(self)
+        explanation = QLabel(
+            "Select fitted parameters to perturb. Sensitivities are normalized by the "
+            "parameter bounds width and the baseline response range."
+        )
+        explanation.setWordWrap(True)
+        layout.addWidget(explanation)
+
+        form = QFormLayout()
+        self.task_edit = QLineEdit("sensitivity")
+        self.method_combo = QComboBox()
+        self.method_combo.addItem("Morris screening", "morris")
+        self.method_combo.addItem("Local finite difference", "local")
+        self.baseline_combo = QComboBox()
+        self.baseline_combo.addItem("Initial guess", "initial")
+        if last_optimized is not None and len(last_optimized) == len(parameter_specs):
+            self.baseline_combo.addItem("Last optimized result", "optimized")
+            self.baseline_combo.setCurrentIndex(1)
+        self.perturbation_spin = QDoubleSpinBox()
+        self.perturbation_spin.setRange(0.01, 25.0)
+        self.perturbation_spin.setDecimals(2)
+        self.perturbation_spin.setSingleStep(0.25)
+        self.perturbation_spin.setValue(1.0)
+        self.perturbation_spin.setSuffix(" % of bounds")
+        self.trajectories_spin = QSpinBox()
+        self.trajectories_spin.setRange(2, 100)
+        self.trajectories_spin.setValue(10)
+        self.levels_spin = QSpinBox()
+        self.levels_spin.setRange(4, 20)
+        self.levels_spin.setSingleStep(2)
+        self.levels_spin.setValue(4)
+        self.seed_spin = QSpinBox()
+        self.seed_spin.setRange(0, 2_147_483_647)
+        self.seed_spin.setValue(42)
+        form.addRow("Method:", self.method_combo)
+        form.addRow("Task name:", self.task_edit)
+        form.addRow("Baseline:", self.baseline_combo)
+        form.addRow("Perturbation:", self.perturbation_spin)
+        form.addRow("Morris trajectories:", self.trajectories_spin)
+        form.addRow("Morris grid levels:", self.levels_spin)
+        form.addRow("Random seed:", self.seed_spin)
+        layout.addLayout(form)
+
+        selection_row = QHBoxLayout()
+        selection_row.addWidget(QLabel("Parameters:"))
+        selection_row.addStretch()
+        select_all = QPushButton("Select all")
+        clear_all = QPushButton("Clear")
+        selection_row.addWidget(select_all)
+        selection_row.addWidget(clear_all)
+        layout.addLayout(selection_row)
+
+        self.parameter_list = QListWidget()
+        for index, spec in enumerate(parameter_specs):
+            item = QListWidgetItem(spec["name"])
+            item.setData(Qt.ItemDataRole.UserRole, index)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Checked)
+            item.setToolTip(
+                f"Initial: {spec['initial']}\nBounds: {spec['lower']} - {spec['upper']}"
+            )
+            self.parameter_list.addItem(item)
+        layout.addWidget(self.parameter_list, 1)
+        self.evaluation_label = QLabel()
+        layout.addWidget(self.evaluation_label)
+
+        select_all.clicked.connect(lambda: self._set_all(Qt.CheckState.Checked))
+        clear_all.clicked.connect(lambda: self._set_all(Qt.CheckState.Unchecked))
+        self.method_combo.currentIndexChanged.connect(self._update_method_controls)
+        self.trajectories_spin.valueChanged.connect(self._update_evaluation_count)
+        self.parameter_list.itemChanged.connect(self._update_evaluation_count)
+        footer = QHBoxLayout()
+        help_button = QPushButton("Help")
+        help_button.clicked.connect(
+            lambda: _show_sensitivity_help(self, self.method_combo.currentData())
+        )
+        footer.addWidget(help_button)
+        load_button = QPushButton("Load previous result…")
+        load_button.clicked.connect(self._load_previous_result)
+        footer.addWidget(load_button)
+        footer.addStretch()
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self._accept_if_valid)
+        buttons.rejected.connect(self.reject)
+        footer.addWidget(buttons)
+        layout.addLayout(footer)
+        self._restore_configuration()
+        self._update_method_controls()
+
+    def _set_all(self, state):
+        for index in range(self.parameter_list.count()):
+            self.parameter_list.item(index).setCheckState(state)
+
+    def selected_indexes(self):
+        return [
+            int(self.parameter_list.item(index).data(Qt.ItemDataRole.UserRole))
+            for index in range(self.parameter_list.count())
+            if self.parameter_list.item(index).checkState() == Qt.CheckState.Checked
+        ]
+
+    def _accept_if_valid(self):
+        if not self.selected_indexes():
+            QMessageBox.information(self, "Sensitivity", "Select at least one parameter.")
+            return
+        if (self.method_combo.currentData() == "morris"
+                and self.levels_spin.value() % 2):
+            QMessageBox.information(
+                self, "Sensitivity", "Morris grid levels must be an even number."
+            )
+            return
+        self.accept()
+
+    def _update_method_controls(self):
+        morris = self.method_combo.currentData() == "morris"
+        self.perturbation_spin.setEnabled(not morris)
+        self.trajectories_spin.setEnabled(morris)
+        self.levels_spin.setEnabled(morris)
+        self.seed_spin.setEnabled(morris)
+        self._update_evaluation_count()
+
+    def _update_evaluation_count(self, _value=None):
+        parameter_count = len(self.selected_indexes())
+        if self.method_combo.currentData() == "morris":
+            evaluations = 1 + self.trajectories_spin.value() * (parameter_count + 1)
+            self.evaluation_label.setText(
+                f"Estimated runs: {evaluations} "
+                f"({self.trajectories_spin.value()} × ({parameter_count} + 1), plus baseline)"
+            )
+        else:
+            evaluations = 1 + 2 * parameter_count
+            self.evaluation_label.setText(f"Maximum runs: {evaluations}")
+
+    def _restore_configuration(self):
+        configuration = self.initial_configuration
+        if not configuration:
+            return
+        method_index = self.method_combo.findData(configuration.get("method"))
+        if method_index >= 0:
+            self.method_combo.setCurrentIndex(method_index)
+        self.task_edit.setText(str(configuration.get("task") or "sensitivity"))
+        baseline_index = self.baseline_combo.findData(configuration.get("baseline_source"))
+        if baseline_index >= 0:
+            self.baseline_combo.setCurrentIndex(baseline_index)
+        self.perturbation_spin.setValue(float(configuration.get("perturbation_percent", 1.0)))
+        self.trajectories_spin.setValue(int(configuration.get("trajectories", 10)))
+        self.levels_spin.setValue(int(configuration.get("levels", 4)))
+        self.seed_spin.setValue(int(configuration.get("random_seed", 42)))
+        selected = set(configuration.get("selected_indexes", range(len(self.parameter_specs))))
+        for index in range(self.parameter_list.count()):
+            item = self.parameter_list.item(index)
+            parameter_index = int(item.data(Qt.ItemDataRole.UserRole))
+            item.setCheckState(
+                Qt.CheckState.Checked
+                if parameter_index in selected else Qt.CheckState.Unchecked
+            )
+
+    def _load_previous_result(self):
+        path = QFileDialog.getOpenFileName(
+            self,
+            "Load sensitivity result",
+            self.output_folder,
+            "Sensitivity JSON (*.json);;All files (*)",
+        )[0]
+        if not path:
+            return
+        try:
+            result = load_sensitivity_result(path)
+        except Exception as error:
+            QMessageBox.warning(
+                self, "Sensitivity", "Unable to load sensitivity result:\n" + str(error)
+            )
+            return
+        result_dialog = SensitivityResultsDialog(result, self)
+        result_dialog.exec()
+
+    def configuration(self):
+        use_optimized = self.baseline_combo.currentData() == "optimized"
+        baseline = self.last_optimized if use_optimized else [
+            spec["initial"] for spec in self.parameter_specs
+        ]
+        return {
+            "task": self.task_edit.text().strip() or "sensitivity",
+            "method": self.method_combo.currentData(),
+            "baseline": list(baseline),
+            "baseline_source": self.baseline_combo.currentData(),
+            "selected_indexes": self.selected_indexes(),
+            "perturbation_percent": self.perturbation_spin.value(),
+            "trajectories": self.trajectories_spin.value(),
+            "levels": self.levels_spin.value(),
+            "random_seed": self.seed_spin.value(),
+        }
+
+
+class SensitivityResultsDialog(QDialog):
+    """Display sensitivity importance, response heatmap, and parameter correlation."""
+
+    def __init__(self, result, parent=None):
+        super().__init__(parent)
+        self.result = result
+        self.back_requested = False
+        self.setWindowTitle(f"Sensitivity results — {result.task}")
+        self.resize(1120, 720)
+        layout = QVBoxLayout(self)
+
+        if result.method == "morris":
+            method_summary = (
+                f"Morris | Trajectories: {result.trajectories} | "
+                f"Grid levels: {result.levels} | Seed: {result.random_seed}"
+            )
+        else:
+            method_summary = (
+                f"Local finite difference | Perturbation: "
+                f"{result.perturbation_percent:g}% of bounds"
+            )
+        summary = QLabel(
+            f"{result.mode} / {result.model} | {method_summary}\n"
+            f"JSON: {result.json_path}"
+        )
+        summary.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(summary)
+
+        tabs = QTabWidget()
+        if result.method == "morris":
+            tabs.addTab(self._morris_overview_tab(), "Morris μ* / σ")
+            tabs.addTab(
+                self._matrix_tab(
+                    result.normalized_sensitivity,
+                    "Morris μ* by data point",
+                    x_values=result.x_values,
+                    x_label=result.x_label,
+                    y_labels=[spec["name"] for spec in result.parameters],
+                    positive_only=True,
+                ),
+                "μ* heatmap",
+            )
+        else:
+            tabs.addTab(self._importance_tab(), "Importance")
+            tabs.addTab(
+                self._matrix_tab(
+                    result.normalized_sensitivity,
+                    "Normalized sensitivity",
+                    x_values=result.x_values,
+                    x_label=result.x_label,
+                    y_labels=[spec["name"] for spec in result.parameters],
+                ),
+                "Sensitivity heatmap",
+            )
+            tabs.addTab(
+                self._matrix_tab(
+                    result.correlation,
+                    "Parameter correlation",
+                    x_labels=[spec["name"] for spec in result.parameters],
+                    y_labels=[spec["name"] for spec in result.parameters],
+                    fixed_range=(-1.0, 1.0),
+                ),
+                "Correlation",
+            )
+        layout.addWidget(tabs, 1)
+        button_layout = QHBoxLayout()
+        help_button = QPushButton("Help")
+        help_button.clicked.connect(
+            lambda: _show_sensitivity_help(self, self.result.method)
+        )
+        button_layout.addWidget(help_button)
+        button_layout.addStretch()
+        back_button = QPushButton("Back to settings")
+        close_button = QPushButton("Close")
+        back_button.clicked.connect(self._back_to_settings)
+        close_button.clicked.connect(self.reject)
+        button_layout.addWidget(back_button)
+        button_layout.addWidget(close_button)
+        layout.addLayout(button_layout)
+
+    def _back_to_settings(self):
+        self.back_requested = True
+        self.accept()
+
+    def _morris_overview_tab(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        plot = pg.PlotWidget()
+        plot.setBackground("w")
+        plot.showGrid(x=True, y=True, alpha=0.25)
+        plot.setLabel("bottom", "μ* — overall importance")
+        plot.setLabel("left", "σ — nonlinearity / interaction indication")
+        names = [spec["name"] for spec in self.result.parameters]
+        point_tip = lambda x, y, data: (
+            f"{data['name']}\nμ: {data['mu']:.6g}\nμ*: {x:.6g}\nσ: {y:.6g}"
+        )
+        point_data = [
+            {
+                "name": name,
+                "mu": float(self.result.morris_mu[index]),
+            }
+            for index, name in enumerate(names)
+        ]
+        scatter = pg.ScatterPlotItem(
+            x=self.result.morris_mu_star,
+            y=self.result.morris_sigma,
+            data=point_data,
+            symbol="o",
+            size=11,
+            pen=pg.mkPen("#00507D", width=1.5),
+            brush=pg.mkBrush("#56B4E9"),
+            hoverable=True,
+            hoverSize=14,
+            tip=point_tip,
+        )
+        plot.addItem(scatter)
+        layout.addWidget(plot, 2)
+
+        table = QTableWidget(len(names), 4)
+        table.setHorizontalHeaderLabels(("Parameter", "μ", "μ*", "σ"))
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        for row, name in enumerate(names):
+            values = (
+                name,
+                f"{self.result.morris_mu[row]:.6g}",
+                f"{self.result.morris_mu_star[row]:.6g}",
+                f"{self.result.morris_sigma[row]:.6g}",
+            )
+            for column, value in enumerate(values):
+                table.setItem(row, column, QTableWidgetItem(value))
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(table, 1)
+        return page
+
+    def _importance_tab(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        plot = pg.PlotWidget()
+        plot.setBackground("w")
+        names = [spec["name"] for spec in self.result.parameters]
+        positions = list(range(len(names)))
+        bars = pg.BarGraphItem(
+            y=positions,
+            x0=0,
+            width=self.result.importance,
+            height=0.65,
+            brush=pg.mkBrush("#0072B2"),
+            pen=pg.mkPen("#00507D"),
+        )
+        plot.addItem(bars)
+        plot.getAxis("left").setTicks([list(zip(positions, names))])
+        plot.setLabel("bottom", "RMS normalized sensitivity")
+        plot.showGrid(x=True, y=False, alpha=0.25)
+        plot.setYRange(-0.8, max(0.8, len(names) - 0.2), padding=0)
+        layout.addWidget(plot, 2)
+
+        table = QTableWidget(len(names), 5)
+        table.setHorizontalHeaderLabels(("Parameter", "Baseline", "Lower", "Upper", "Importance"))
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        for row, spec in enumerate(self.result.parameters):
+            values = (
+                spec["name"],
+                f"{self.result.baseline_parameters[row]:.6g}",
+                f"{float(spec['lower']):.6g}",
+                f"{float(spec['upper']):.6g}",
+                f"{self.result.importance[row]:.6g}",
+            )
+            for column, value in enumerate(values):
+                table.setItem(row, column, QTableWidgetItem(value))
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(table, 1)
+        return page
+
+    @staticmethod
+    def _matrix_tab(matrix, title, x_values=None, x_label="Parameter", x_labels=None,
+                    y_labels=None, fixed_range=None, positive_only=False):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        plot = pg.PlotWidget()
+        plot.setBackground("w")
+        array = np.asarray(matrix, dtype=float)
+        image = pg.ImageItem(array.T)
+        image.setRect(QRectF(-0.5, -0.5, array.shape[1], array.shape[0]))
+        plot.addItem(image)
+
+        if positive_only:
+            maximum = float(np.nanmax(array)) if array.size else 1.0
+            maximum = maximum if maximum > 0 else 1.0
+            levels = (0.0, maximum)
+            color_map = pg.ColorMap(
+                [0.0, 0.5, 1.0],
+                [(255, 255, 255), (103, 169, 207), (5, 48, 97)],
+            )
+        elif fixed_range is None:
+            maximum = float(np.nanmax(np.abs(array))) if array.size else 1.0
+            maximum = maximum if maximum > 0 else 1.0
+            levels = (-maximum, maximum)
+            color_map = pg.ColorMap(
+                [0.0, 0.5, 1.0],
+                [(49, 54, 149), (255, 255, 255), (165, 0, 38)],
+            )
+        else:
+            levels = fixed_range
+            color_map = pg.ColorMap(
+                [0.0, 0.5, 1.0],
+                [(49, 54, 149), (255, 255, 255), (165, 0, 38)],
+            )
+        image.setLookupTable(color_map.getLookupTable(0.0, 1.0, 256))
+        image.setLevels(levels)
+        color_bar = pg.ColorBarItem(values=levels, colorMap=color_map, label=title)
+        color_bar.setImageItem(image, insert_in=plot.getPlotItem())
+
+        if y_labels:
+            plot.getAxis("left").setTicks([[ (index, name) for index, name in enumerate(y_labels) ]])
+        if x_labels:
+            plot.getAxis("bottom").setTicks([[ (index, name) for index, name in enumerate(x_labels) ]])
+        elif x_values is not None and len(x_values):
+            count = min(8, len(x_values))
+            indexes = sorted(set(int(round(value)) for value in np.linspace(0, len(x_values) - 1, count)))
+            plot.getAxis("bottom").setTicks([[
+                (index, f"{float(x_values[index]):.4g}") for index in indexes
+            ]])
+        plot.setLabel("bottom", x_label)
+        plot.setTitle(title)
+        plot.setXRange(-0.5, max(0.5, array.shape[1] - 0.5), padding=0)
+        plot.setYRange(-0.5, max(0.5, array.shape[0] - 0.5), padding=0)
+        layout.addWidget(plot)
+        return page
 
 
 class HistoryComparisonDialog(QDialog):
