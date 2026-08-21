@@ -11,6 +11,8 @@ in `iphreeqc_dll_builder`.
 The Windows build uses `src_new` as its only application source. It builds the
 calculation module as a Cython `.pyd`, bundles the Windows IPhreeqc DLL, creates
 a portable ZIP, and optionally creates a standard installer with Inno Setup 6.
+The installer script uses Inno Setup's built-in English messages and does not
+depend on optional language files installed separately.
 
 ## Requirements
 
