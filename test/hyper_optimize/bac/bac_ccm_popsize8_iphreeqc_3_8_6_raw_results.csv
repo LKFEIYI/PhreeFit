@@ -1,0 +1,15 @@
+model,popsize,run_id,seed,parameter_count,nominal_population_members,strategy,recombination,init,de_maxiter,elapsed_seconds,de_fun,de_nfev,de_nit,de_success,nm_fun,nm_nfev,nm_nit,nm_success,final_fun,completed,error
+CCM,8,0,42,7,56,best1exp,0.9,halton,1000,27.742702125106007,0.16417622569372112,8232.0,146.0,True,0.16392202766153452,496.0,272.0,True,0.16392202766153452,True,
+CCM,8,1,84,7,56,best1exp,0.9,halton,1000,6.105521083110943,,,,False,,,,False,,False,"Exception: An error occured.
+ERROR: Negative concentration in solution 11. Stopping calculation."
+CCM,8,2,126,7,56,best1exp,0.9,halton,1000,6.1698966671247035,1.8177283892134037,1288.0,22.0,True,1.8176358515695077,662.0,251.0,True,1.8176358515695077,True,
+CCM,8,3,168,7,56,best1exp,0.9,halton,1000,29.259977624984458,0.16420477129278102,8848.0,157.0,True,0.16379088816943657,395.0,199.0,True,0.16379088816943657,True,
+CCM,8,4,210,7,56,best1exp,0.9,halton,1000,19.784821041859686,,,,False,,,,False,,False,"Exception: An error occured.
+ERROR: Negative concentration in solution 11. Stopping calculation."
+CCM,8,5,252,7,56,best1exp,0.9,halton,1000,7.07606091699563,,,,False,,,,False,,False,"Exception: An error occured.
+ERROR: Negative concentration in solution 11. Stopping calculation."
+CCM,8,6,294,7,56,best1exp,0.9,halton,1000,26.187840417027473,0.16413297540838567,7840.0,139.0,True,0.16394710760054862,427.0,210.0,True,0.16394710760054862,True,
+CCM,8,7,336,7,56,best1exp,0.9,halton,1000,18.395292750094086,,,,False,,,,False,,False,"Exception: An error occured.
+ERROR: Negative concentration in solution 11. Stopping calculation."
+CCM,8,8,378,7,56,best1exp,0.9,halton,1000,7.7567898749839514,1.8176664165747798,1792.0,31.0,True,1.817639446602778,695.0,291.0,True,1.817639446602778,True,
+CCM,8,9,420,7,56,best1exp,0.9,halton,1000,32.610332124866545,0.16406687838901282,9856.0,175.0,True,0.16392233527894243,382.0,195.0,True,0.16392233527894243,True,

@@ -1,0 +1,204 @@
+# PHREEQC.DAT for calculating pressure dependence of reactions, with
+#   molal volumina of aqueous species and of minerals, and
+#   critical temperatures and pressures of gases used in Peng-Robinson's EOS.
+# Details are given at the end of this file.
+
+SOLUTION_MASTER_SPECIES
+#
+#element	species	alk	gfw_formula	element_gfw
+#
+H		H+	-1.0	H		1.008
+H(0)		H2	0	H
+H(1)		H+	-1.0	0
+E		e-	0	0.0		0
+O		H2O	0	O		16.0
+O(0)		O2	0	O
+O(-2)		H2O	0	0
+Ca		Ca+2	0	Ca		40.08
+Na		Na+	0	Na		22.9898
+Cl		Cl-	0	Cl		35.453
+C		CO3-2	2.0	HCO3		12.0111
+C(+4)		CO3-2	2.0	HCO3
+C(-4)		CH4	0	CH4
+Alkalinity	CO3-2	1.0	Ca0.5(CO3)0.5	50.05
+N		NO3-	0	N		14.0067
+N(+5)		NO3-	0	N
+N(+3)		NO2-	0	N
+N(0)		N2	0	N
+N(-3)	        NH4+	0	N		14.0067
+P		PO4-3	2.0	P		30.9738
+K		K+	0	K		39.102
+
+
+
+SOLUTION_SPECIES
+H+ = H+
+	#	9.0	0
+	-dw	9.31e-9  1000  0.46  1e-10 # The dw parameters are defined in ref. 3.
+# Dw(TK) = 9.31e-9 * exp(1000 / TK - 1000 / 298.15) * TK * 0.89 / (298.15 * viscos)
+# Dw(I) = Dw(TK) * exp(-0.46 * DH_A * |z_H+| * I^0.5 / (1 + DH_B * I^0.5 * 1e-10 / (1 + I^0.75)))
+e- = e-
+H2O = H2O
+# H2O + 0.01e- = H2O-0.01; -log_k -9 # aids convergence
+Ca+2 = Ca+2
+	#	5.0	0.1650
+	-dw	0.793e-9  97  3.4  24.6
+	-Vm  -0.3456  -7.252  6.149  -2.479  1.239  5  1.60  -57.1  -6.12e-3  1 # ref. 1
+CO3-2 = CO3-2
+	#	5.4	0
+	-dw	0.955e-9  0  1.12  2.84
+	-Vm  5.95  0  0  -5.67  6.85  0  1.37  106  -0.0343  1 # ref. 1
+Na+ = Na+
+	#	4.0	 0.075
+	#	4.08 0.082 # halite solubility
+	-dw	1.33e-9  122  1.52  3.70
+	-Vm   2.28  -4.38  -4.1  -0.586  0.09  4  0.3  52  -3.33e-3  0.566 # ref. 1
+Cl- = Cl-
+	#	3.5	  0.015
+	#	3.63  0.017 # cf. pitzer.dat
+	-dw	2.03e-9  194  1.6  6.9
+	-Vm  4.465  4.801  4.325  -2.847  1.748  0  -0.331  20.16  0  1 # ref. 1
+NO3- = NO3-
+	#	3.0	0
+	-dw	1.9e-9  184  1.85  3.85
+	-Vm  6.32  6.78  0  -3.06  0.346  0  0.93  0  -0.012  1 # ref. 1
+PO4-3 = PO4-3
+	#	4.0	0
+	-dw	 0.612e-9
+	-Vm   1.24  -9.07  9.31  -2.4  5.61  0  0  0  -1.41e-2  1 # ref. 2
+# aqueous species
+H2O = OH- + H+
+	-analytic  293.29227  0.1360833  -10576.913  -123.73158  0  -6.996455e-5
+	#	3.5	0
+	-dw	 5.27e-9  548  0.52  1e-10
+	-Vm  -9.66  28.5  80.0 -22.9 1.89 0 1.09 0 0 1 # ref. 1
+2 H2O = O2 + 4 H+ + 4 e-
+	-log_k	-86.08
+	-delta_h 134.79 kcal
+	-dw	 2.35e-9
+	-Vm  5.7889  6.3536  3.2528  -3.0417  -0.3943 # supcrt
+2 H+ + 2 e- = H2
+	-log_k	-3.15
+	-delta_h -1.759 kcal
+	-dw	 5.13e-9
+	-Vm 6.52  0.78  0.12 # supcrt
+CO3-2 + H+ = HCO3-
+	-log_k	10.329
+	-delta_h -3.561	kcal
+	-analytic	107.8871	0.03252849	-5151.79	-38.92561	563713.9
+	#	5.4      0
+	-dw	1.18e-9  0  1.43  1e-10
+	-Vm  8.472  0  -11.5  0  1.56  0  0  146  3.16e-3  1 # ref. 1
+CO3-2 + 2 H+ = CO2 + H2O
+	-log_k	16.681
+	-delta_h -5.738	kcal
+	-analytic	464.1965	0.09344813	-26986.16	-165.75951	2248628.9
+	-dw	 1.92e-9
+	-Vm   7.29  0.92  2.07  -1.23  -1.60 # ref. 1 + McBride et al. 2015, JCED 60, 171
+2CO2 = (CO2)2 # activity correction for CO2 solubility at high P, T
+	-log_k -1.8
+	-analytical_expression  8.68  -0.0103  -2190
+	-Vm   14.58  1.84  4.14  -2.46  -3.20
+CO3-2 + 10 H+ + 8 e- = CH4 + 3 H2O
+	-log_k	41.071
+	-delta_h -61.039 kcal
+	-dw   1.85e-9
+	-Vm   9.01  -1.11  0  -1.85  -1.50 # ref. 1 + Hnedkovsky et al., 1996, JCT 28, 125
+NO3- + 2 H+ + 2 e- = NO2- + H2O
+	-log_k	28.570
+	-delta_h -43.760 kcal
+	#	3.0	0
+	-dw	 1.91e-9
+	-Vm  5.5864  5.8590  3.4472  -3.0212  1.1847 # supcrt
+2 NO3- + 12 H+ + 10 e- = N2 + 6 H2O
+	-log_k	207.08
+	-delta_h -312.130	kcal
+	-dw	 1.96e-9
+	-Vm 7 # Pray et al., 1952, IEC 44. 1146
+NO3- + 10 H+ + 8 e- = NH4+ + 3 H2O
+	-log_k	119.077
+	-delta_h -187.055	kcal	
+	#	2.5	0
+	-dw	1.98e-9  312  0.95  4.53
+	-Vm  4.837  2.345  5.522  -2.88 1.096  3  -1.456  75.0  7.17e-3  1 # ref. 1
+
+NH4+ = NH3 + H+
+	-log_k	-9.252
+	-delta_h 12.48	kcal
+	-analytic  0.6322  -0.001225  -2835.76
+	-dw	 2.28e-9
+	-Vm   6.69  2.8  3.58  -2.88  1.43 # ref. 2
+Na+ + OH- = NaOH
+	-log_k	-10 # remove this complex
+Na+ + CO3-2 = NaCO3-
+	-log_k	1.27
+	-delta_h 8.91 kcal
+	-dw  1.2e-9  0  1e-10  1e-10
+	-Vm  3.89  -8.23e-4  20  -9.44  3.02  9.05e-3  3.07  0  0.0233  1 # ref. 1
+Na+ + HCO3- = NaHCO3
+	-log_k  -0.25
+	-delta_h  -1 kcal
+	-dw 6.73e-10
+	-Vm  0.431 # ref. 1
+PO4-3 + H+ = HPO4-2
+	-log_k	12.346
+	-delta_h -3.530	kcal
+	#	5.0	0
+	-dw	0.69e-9
+	-Vm   3.52  1.09  8.39  -2.82  3.34  0  0  0  0  1 # ref. 2
+PO4-3 + 2 H+ = H2PO4-
+	-log_k	19.553
+	-delta_h -4.520	kcal
+	#	5.4	0
+	-dw	 0.846e-9
+	-Vm   5.58  8.06  12.2  -3.11  1.3  0  0  0  1.62e-2  1 # ref. 2
+PO4-3 + 3H+ = H3PO4
+	log_k	21.721 # log_k and delta_h from minteq.v4.dat, NIST46.3
+	delta_h	-10.1	kJ
+	-Vm   7.47  12.4  6.29  -3.29  0 # ref. 2
+K+ = K+
+	#	3.5	0.015
+	-dw	1.96e-9  395  2.5  21
+	-Vm  3.322  -1.473  6.534  -2.712  9.06e-2  3.5  0  29.7  0  1 # ref. 1
+K+ + HPO4-2 = KHPO4-
+	-log_k 0.29
+	#	5.4	0
+	-Vm   5.4  8.1  19  -3.1  0.7  0  0  0  1.62e-2  1 # ref. 2
+K+ + PO4-3 = KPO4-2
+	-log_k	 1.43
+K+ + NO3- = KNO3
+	-log_k	 -0.19
+PHASES
+# Gases...
+CO2(g)
+	CO2 = CO2
+	-log_k	-1.468
+	-delta_h -4.776 kcal
+	-analytic   10.5624  -2.3547e-2  -3972.8  0  5.8746e5  1.9194e-5
+	-T_c  304.2 # critical T, K
+	-P_c   72.86 # critical P, atm
+	-Omega 0.225 # acentric factor
+H2O(g)
+	H2O = H2O
+	-log_k  1.506; delta_h -44.03 kJ
+	-T_c  647.3
+	-P_c  217.60
+	-Omega 0.344
+	-analytic   -16.5066 -2.0013E-3  2710.7  3.7646  0 2.24E-6
+O2(g)
+	O2 = O2
+	-log_k   -2.8983
+	-analytic -7.5001 7.8981e-3 0.0 0.0 2.0027e5
+	-T_c  154.6; -P_c   49.80; -Omega 0.021
+H2(g)
+	H2 = H2
+	-log_k	   -3.1050
+	-delta_h -4.184  kJ
+	-analytic   -9.3114    4.6473e-3   -49.335    1.4341    1.2815e5
+	-T_c  33.2; -P_c   12.80; -Omega -0.225
+N2(g)
+	N2 = N2
+	-log_k		 -3.1864
+	-analytic -58.453 1.818e-3  3199  17.909 -27460
+	-T_c  126.2; -P_c   33.50; -Omega 0.039
+END

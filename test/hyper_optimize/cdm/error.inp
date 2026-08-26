@@ -1,0 +1,170 @@
+SOLUTION_RAW                 1 
+  -temp                      25
+  -pressure                  1
+  -potential                 0
+  -total_h                   111.0124336156
+  -total_o                   55.536227907639
+  -cb                        1.9379452088688e-18
+  -density                   0.99761042890868
+  -totals
+    H(0)                     1.4126338686202e-25
+    N(5)                     0.010003699727362
+    Na                       0.010003701037277
+  -pH                        7
+  -pe                        4
+  -mu                        0.010003811914736
+  -ah2o                      0.9996598703949
+  -mass_water                1
+  -soln_vol                  1.0032476130073
+  -total_alkalinity          1.3099145712634e-09
+  -activities
+    E                        -4
+    H(0)                     -25.15
+    N(5)                     -2.0446826177955
+    Na                       -2.0446825609277
+    O(0)                     -42.080295483075
+  -gammas
+SOLUTION_RAW                 12 Solution after simulation 4.
+  -temp                      25
+  -pressure                  1
+  -potential                 0
+  -total_h                   111.11243359386
+  -total_o                   55.806216797539
+  -cb                        -1.2164725636518e-09
+  -density                   1.000348626517
+  -totals
+    N(0)                     0.00026339676008766
+    N(3)                     1.8412300309657e-14
+    N(5)                     0.099736603239894
+    O(0)                     0.00065849190023308
+  -pH                        1.108298245161
+  -pe                        19.544314329493
+  -mu                        0.099736365807595
+  -ah2o                      0.99660112752754
+  -mass_water                1.0000023745025
+  -soln_vol                  1.0059507707098
+  -total_alkalinity          -0.09973660202344
+  -activities
+    E                        -19.544314329493
+    H(0)                     -44.455225151378
+    N(-3)                    -49.464359446972
+    N(0)                     -3.8704469616968
+    N(3)                     -13.842044765431
+    N(5)                     -1.1082982398678
+    O(0)                     -3.4725069488742
+  -gammas
+SOLUTION_RAW                 13 Solution after simulation 5.
+  -temp                      25
+  -pressure                  1
+  -potential                 0
+  -total_h                   111.11243359421
+  -total_o                   55.606216797889
+  -cb                        -1.5670021807912e-09
+  -density                   1.0015125843246
+  -totals
+    H(0)                     4.0769358805147e-16
+    Na                       0.1
+  -pH                        12.888996385551
+  -pe                        -6.6236483279469
+  -mu                        0.10000000042755
+  -ah2o                      0.99659999998545
+  -mass_water                1.0000000018025
+  -soln_vol                  1.0024834410905
+  -total_alkalinity          0.100000001567
+  -activities
+    E                        6.6236483279469
+    H(0)                     -15.662144583921
+    Na                       -1.1072342806341
+    O(0)                     -61.058669066501
+  -gammas
+SURFACE_RAW                  1 
+  # SURFACE_MODIFY candidate identifiers #
+  -type                      3
+  -dl_type                   0
+  -only_counter_ions         0
+  -thickness                 1e-08
+  -debye_lengths             0
+  -DDL_viscosity             1
+  -DDL_limit                 0.8
+  -component                 Inter_aH1.667
+    # SURFACE_MODIFY candidate identifiers #
+    -formula_z               0
+    -moles                   0.0067788238475261
+    -la                      0
+    -charge_balance          0
+    -phase_proportion        0
+    -Dw                      0
+    -charge_name             Inter
+    -master_element          Inter_a
+    -totals
+      H                      0.011300299353826
+      Inter_a                0.0067788238475261
+  -component                 Surf_aH1.333
+    # SURFACE_MODIFY candidate identifiers #
+    -formula_z               0
+    -moles                   0.0099319128407871
+    -la                      0
+    -charge_balance          0
+    -phase_proportion        0
+    -Dw                      0
+    -charge_name             Surf
+    -master_element          Surf_a
+    -totals
+      H                      0.013239239816769
+      Surf_a                 0.0099319128407871
+  -component                 Surf_bH1.667
+    # SURFACE_MODIFY candidate identifiers #
+    -formula_z               0
+    -moles                   0.0042694917698978
+    -la                      0
+    -charge_balance          0
+    -phase_proportion        0
+    -Dw                      0
+    -charge_name             Surf
+    -master_element          Surf_b
+    -totals
+      H                      0.0071172427804196
+      Surf_b                 0.0042694917698978
+  -charge_component          Inter
+    # SURFACE_MODIFY candidate identifiers #
+    -specific_area           48.56
+    -grams                   0.08
+    -charge_balance          0
+    -mass_water              0
+    -la_psi                  0
+    -capacitance0            1.9185394004758
+    -capacitance1            0.78586762370544
+    -diffuse_layer_totals
+    # Surface workspace variables #
+    -sigma0                  0
+    -sigma1                  0
+    -sigma2                  0
+    -sigmaddl                0
+  -charge_component          Surf
+    # SURFACE_MODIFY candidate identifiers #
+    -specific_area           48.56
+    -grams                   0.08
+    -charge_balance          0
+    -mass_water              0
+    -la_psi                  0
+    -capacitance0            2.1284884560995
+    -capacitance1            1.3540174850619
+    -diffuse_layer_totals
+    # Surface workspace variables #
+    -sigma0                  0
+    -sigma1                  0
+    -sigma2                  0
+    -sigmaddl                0
+  # SURFACE_MODIFY candidates with new_def=true #
+  -new_def                   1
+  -tidied                   1
+  -sites_units               0
+  -solution_equilibria       0
+  -n_solution                -999
+  # Surface workspace variables #
+  -transport                 0
+  -totals                    
+MIX_RAW                      17 
+  1     0.04
+  12     0.000497
+  13     0.00082566

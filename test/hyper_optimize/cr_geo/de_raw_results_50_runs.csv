@@ -1,0 +1,577 @@
+strategy,init,recombination,run_id,nfev,nit,fun,time,error
+best1exp,latinhypercube,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1bin,latinhypercube,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1bin,latinhypercube,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1exp,latinhypercube,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2bin,latinhypercube,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2exp,latinhypercube,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1bin,latinhypercube,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1exp,latinhypercube,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1bin,latinhypercube,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1exp,latinhypercube,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2exp,latinhypercube,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2bin,latinhypercube,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1bin,latinhypercube,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1exp,latinhypercube,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1bin,latinhypercube,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1exp,latinhypercube,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2bin,latinhypercube,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2exp,latinhypercube,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1bin,latinhypercube,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1exp,latinhypercube,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1bin,latinhypercube,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1exp,latinhypercube,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2exp,latinhypercube,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2bin,latinhypercube,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1bin,latinhypercube,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1exp,latinhypercube,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1bin,latinhypercube,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1exp,latinhypercube,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2bin,latinhypercube,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2exp,latinhypercube,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1bin,latinhypercube,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1exp,latinhypercube,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1bin,latinhypercube,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1exp,latinhypercube,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2bin,latinhypercube,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2exp,latinhypercube,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1bin,sobol,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1exp,sobol,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1bin,sobol,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1exp,sobol,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2bin,sobol,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2exp,sobol,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1bin,sobol,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1exp,sobol,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1bin,sobol,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1exp,sobol,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2exp,sobol,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2bin,sobol,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1bin,sobol,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1exp,sobol,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1bin,sobol,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1exp,sobol,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2bin,sobol,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2exp,sobol,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1bin,sobol,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1exp,sobol,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1bin,sobol,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1exp,sobol,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2exp,sobol,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2bin,sobol,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1exp,sobol,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1bin,sobol,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1bin,sobol,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1exp,sobol,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2bin,sobol,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2exp,sobol,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1bin,sobol,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1exp,sobol,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1bin,sobol,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1exp,sobol,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2exp,sobol,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2bin,sobol,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1bin,halton,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1exp,halton,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1bin,halton,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1exp,halton,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2bin,halton,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2exp,halton,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1bin,halton,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1exp,halton,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1bin,halton,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1exp,halton,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2exp,halton,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2bin,halton,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1bin,halton,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1exp,halton,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1bin,halton,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1exp,halton,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2bin,halton,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2exp,halton,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1bin,halton,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1exp,halton,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1bin,halton,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1exp,halton,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2exp,halton,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2bin,halton,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1exp,halton,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1bin,halton,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1bin,halton,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1exp,halton,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2bin,halton,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2exp,halton,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1bin,halton,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1exp,halton,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1bin,halton,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1exp,halton,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2exp,halton,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2bin,halton,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1bin,random,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1exp,random,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1bin,random,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1exp,random,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2bin,random,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2exp,random,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1bin,random,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1exp,random,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1bin,random,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1exp,random,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2exp,random,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2bin,random,0.7,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1bin,random,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1exp,random,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1bin,random,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1exp,random,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2bin,random,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2exp,random,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1bin,random,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1exp,random,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1bin,random,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1exp,random,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2exp,random,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2bin,random,0.8,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1bin,random,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best1exp,random,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1bin,random,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand1exp,random,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2bin,random,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+rand2exp,random,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1bin,random,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+randtobest1exp,random,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1bin,random,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+currenttobest1exp,random,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2exp,random,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"
+best2bin,random,0.9,0,-1,-1,inf,-1,"An error occured.
+ERROR: Phase not found in database, None.
+ERROR: Calculations terminating due to input errors.
+"

@@ -1,0 +1,19 @@
+seed_3.7.3,completed_3.7.3,completed_3.8.6,same_outcome,elapsed_seconds_3.7.3,elapsed_seconds_3.8.6,time_delta_s,final_fun_3.7.3,final_fun_3.8.6,fun_abs_delta,error_3.7.3,error_3.8.6
+42,True,True,True,31.80785633297637,27.742702125106007,-4.065154207870364,0.1636653083499405,0.1639220276615345,0.0002567193115939892,,
+84,False,False,True,7.010509249987081,6.105521083110943,-0.9049881668761373,,,,"Exception: An error occured.
+ERROR: Negative concentration in solution 11. Stopping calculation.","Exception: An error occured.
+ERROR: Negative concentration in solution 11. Stopping calculation."
+126,False,True,False,4.973449208075181,6.1698966671247035,1.1964474590495229,,1.8176358515695077,,"Exception: An error occured.
+ERROR: Negative concentration in solution 11. Stopping calculation.",
+168,True,True,True,28.133540583075956,29.259977624984455,1.126437041908499,0.1637908222388715,0.1637908881694365,6.59305649797215e-08,,
+210,True,False,False,26.698010958032683,19.784821041859686,-6.913189916172996,0.1639508162320143,,,,"Exception: An error occured.
+ERROR: Negative concentration in solution 11. Stopping calculation."
+252,True,False,False,6.290057209087536,7.07606091699563,0.7860037079080939,1.8176430686428169,,,,"Exception: An error occured.
+ERROR: Negative concentration in solution 11. Stopping calculation."
+294,True,True,True,19.37691095797345,26.187840417027473,6.810929459054023,0.7112332814801964,0.1639471076005486,0.5472861738796477,,
+336,False,False,True,15.22450145916082,18.39529275009409,3.17079129093327,,,,"Exception: An error occured.
+ERROR: Negative concentration in solution 11. Stopping calculation.","Exception: An error occured.
+ERROR: Negative concentration in solution 11. Stopping calculation."
+378,False,True,False,5.503661958035082,7.756789874983952,2.2531279169488707,,1.817639446602778,,"Exception: An error occured.
+ERROR: Negative concentration in solution 11. Stopping calculation.",
+420,True,True,True,33.945152416825294,32.610332124866545,-1.3348202919587493,0.1636471662880338,0.1639223352789424,0.0002751689909085975,,
